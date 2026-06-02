@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use eframe::egui;
+use egui::{emath, vec2, Color32, Context, Frame, Pos2, Rect, Sense, Stroke, Ui, Window};
 use image::ImageReader;
 
 static IMG_EXTS: [&str; 5] = ["jpg", "jpeg", "png", "bmp", "qoi"];
@@ -30,7 +31,7 @@ fn main() -> eframe::Result {
 		"My egui App",
 		options,
 		Box::new(|cc| {
-            egui_extras::install_image_loaders(&cc.egui_ctx);
+			egui_extras::install_image_loaders(&cc.egui_ctx);
 			Ok(Box::<MyApp>::default())
 		}),
 	)
@@ -50,8 +51,11 @@ fn load_image_from_path(path: &PathBuf) -> Result<egui::ColorImage, image::Image
 
 #[derive(Default)]
 struct MyApp {
+    /// in 0-1 normalized coordinates
+    lines: Vec<Vec<Pos2>>,
 	picked_path: Option<PathBuf>,
 	img: Option<egui::ColorImage>,
+    stroke: Stroke,
 }
 
 // ui.heading = <h1>
@@ -60,6 +64,12 @@ struct MyApp {
 impl eframe::App for MyApp {
 	// This is called every time the screen updates
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.ui_control(ui);
+        ui.label("Paint with your mouse/touch!");
+        Frame::canvas(ui.style()).show(ui, |ui| {
+            self.ui_content(ui);
+        });
+
 		egui::CentralPanel::default().show_inside(ui, |ui| {
 			// Header
 			ui.heading("My egui Application");
@@ -84,10 +94,68 @@ impl eframe::App for MyApp {
 				});
 			}
 
-			if let Some(img) = self.img {
-				ui.image(img);
-			}
+			// if let Some(img) = self.img {
+			// 	ui.image(img);
+			// }
 		});
+	}
+}
+
+// Originall from https://github.com/emilk/egui/blob/6c1d695fc66611369f78212e38c2895bc3a7c442/crates/egui_demo_lib/src/demo/painting.rs
+impl MyApp {
+	pub fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
+		ui.horizontal(|ui| {
+			ui.label("Stroke:");
+			ui.add(&mut self.stroke);
+			ui.separator();
+			if ui.button("Clear Painting").clicked() {
+				self.lines.clear();
+			}
+		})
+		.response
+	}
+
+	pub fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
+		let (mut response, painter) = ui.allocate_painter(ui.available_size_before_wrap(), Sense::drag());
+
+		let to_screen = emath::RectTransform::from_to(
+			Rect::from_min_size(Pos2::ZERO, response.rect.square_proportions()),
+			response.rect,
+		);
+
+		let from_screen = to_screen.inverse();
+
+		if self.lines.is_empty() {
+			self.lines.push(vec![]);
+		}
+
+		let current_line = self.lines.last_mut().unwrap();
+
+		// If we are clicking(?)
+		if let Some(pointer_pos) = response.interact_pointer_pos() {
+			let canvas_pos = from_screen * pointer_pos;
+			// If the current position is different from the last position
+			if current_line.last() != Some(&canvas_pos) {
+				current_line.push(canvas_pos);
+				response.mark_changed();
+			}
+		} else if !current_line.is_empty() {
+			self.lines.push(vec![]);
+			response.mark_changed();
+		}
+
+		let shapes = self
+			.lines
+			.iter()
+			.filter(|line| line.len() >= 2)
+			.map(|line| {
+				let points: Vec<Pos2> = line.iter().map(|p| to_screen * *p).collect();
+				egui::Shape::line(points, self.stroke)
+			});
+
+		painter.extend(shapes);
+
+		response
 	}
 }
 
