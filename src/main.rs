@@ -39,7 +39,7 @@ struct MyApp {
 	// Screen coordinates
 	lines: Vec<Vec<Pos2>>,
 	stroke: Stroke,
-	image: Option<(Arc<egui::ColorImage>, egui::TextureHandle)>,
+	image: Option<egui::TextureHandle>,
 	picked_path: Option<PathBuf>,
 	img: Option<egui::ColorImage>,
 }
@@ -101,14 +101,16 @@ impl eframe::App for MyApp {
 
 			// If we took a screenshot this frame, save it into the app data
 			if let Some(image) = image {
-				self.image = Some((
-					image.clone(),
-					ui.ctx().load_texture("screenshot_demo", image, Default::default()),
-				));
+				// If we have a texture made already, just update it
+				if let Some(tex) = &mut self.image {
+					tex.set(image, Default::default());
+				} else {
+					self.image = Some(ui.ctx().load_texture("screenshot_demo", image, Default::default()));
+				}
 			}
 
 			// If we have an image, show it
-			if let Some((_, texture)) = &self.image {
+			if let Some(texture) = &self.image {
 				Image::new(texture).shrink_to_fit().ui(ui);
 			}
 
