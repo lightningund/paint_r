@@ -36,6 +36,7 @@ fn load_image_from_path(path: &PathBuf) -> Result<ColorImage, image::ImageError>
 #[derive(Default)]
 struct MyApp {
 	// In 0-1 NDC
+	// TODO: Make this screen coords, but relative to the drawing frame
 	lines: Vec<Vec<Pos2>>,
 	stroke: Stroke,
 	tex: Option<TextureHandle>,
@@ -46,15 +47,8 @@ struct MyApp {
 impl eframe::App for MyApp {
 	// This is called every time the screen updates
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-		self.ui_control(ui);
-
 		egui::CentralPanel::default().show_inside(ui, |ui| {
-			// Header
-			ui.heading("My egui Application");
-
-            if ui.button("Take Screenshot").clicked() {
-                ui.send_viewport_cmd(ViewportCommand::Screenshot(UserData::default()));
-			}
+			self.ui_control(ui);
 
 			// Create a button, and check if it was clicked. Then, with short circuiting,
 			// if it was clicked we create a file dialog and assign it to path based on what the user clicks
@@ -76,22 +70,8 @@ impl eframe::App for MyApp {
 				});
 			}
 
-			// Originally from https://github.com/emilk/egui/tree/main/crates/egui_demo_lib/src/demo/screenshot.rs
-			// Goes off when we had clicked the button to send a screenshot event
-			let image = ui.ctx().input(|i| {
-				i.events.iter()
-					.filter_map(|evt| {
-						if let egui::Event::Screenshot{image, ..} = evt {
-							Some(image.clone())
-						} else {
-							None
-						}
-					})
-					.last()
-			});
-
 			// If we took a screenshot this frame, save it into the app data
-			if let Some(image) = image {
+			if let Some(image) = self.img.take() {
 				// If we have a texture made already, just update it
 				if let Some(tex) = &mut self.tex {
 					tex.set(image, Default::default());
@@ -100,13 +80,14 @@ impl eframe::App for MyApp {
 				}
 			}
 
-			// If we have an image, show it
-			if let Some(texture) = &self.tex {
-				Image::new(texture).shrink_to_fit().ui(ui);
-			}
-
 			// Drawing canvas
 			Frame::canvas(ui.style()).show(ui, |ui| {
+				// If we have an image, show it
+				if let Some(texture) = &self.tex {
+					Image::new(texture).paint_at(ui, ui.available_rect_before_wrap());
+					// Image::new(texture).shrink_to_fit().ui(ui);
+				}
+
 				self.ui_content(ui);
 			});
 		});
@@ -115,7 +96,7 @@ impl eframe::App for MyApp {
 
 // Originally from https://github.com/emilk/egui/tree/main/crates/egui_demo_lib/src/demo/painting.rs
 impl MyApp {
-	pub fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
+	fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
 		ui.horizontal(|ui| {
 			ui.label("Stroke:");
 			ui.add(&mut self.stroke);
@@ -127,7 +108,7 @@ impl MyApp {
 		.response
 	}
 
-	pub fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
+	fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
 		let (mut response, painter) = ui.allocate_painter(ui.available_size_before_wrap(), Sense::drag());
 
 		let to_screen = emath::RectTransform::from_to(
@@ -172,41 +153,5 @@ impl MyApp {
 		painter.extend(shapes);
 
 		response
-	}
-}
-
-fn preview_files_being_dropped(ctx: &egui::Context) {
-	use egui::{Align2, Color32, Id, LayerId, Order, TextStyle};
-	use std::fmt::Write as _;
-
-	if !ctx.input(|i| i.raw.hovered_files.is_empty()) {
-		// Create a list of all the files being dropped
-		let text = ctx.input(|i| {
-			let mut text = "Dropping files:\n".to_owned();
-			for file in &i.raw.hovered_files {
-				if let Some(path) = &file.path {
-					write!(text, "\n{}", path.display()).ok();
-				} else {
-					text += "\n???";
-				}
-			}
-			text
-		});
-
-		// Create a "painter" to draw the darkened screen and text
-		let painter = ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("file_drop_target")));
-
-		// Full screen
-		let content_rect = ctx.content_rect();
-		// Darken the window
-		painter.rect_filled(content_rect, 0.0, Color32::from_black_alpha(192));
-		// Draw the text
-		painter.text(
-			content_rect.center(),
-			Align2::CENTER_CENTER,
-			text,
-			TextStyle::Heading.resolve(&ctx.global_style()),
-			Color32::WHITE,
-		);
 	}
 }
