@@ -47,7 +47,7 @@ fn load_image_from_path(path: &PathBuf) -> Result<egui::ColorImage, image::Image
 
 #[derive(Default)]
 struct MyApp {
-    /// in 0-1 normalized coordinates
+    // Screen coordinates
     lines: Vec<Vec<Pos2>>,
     stroke: Stroke,
 	picked_path: Option<PathBuf>,
@@ -114,13 +114,6 @@ impl MyApp {
 	pub fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
 		let (mut response, painter) = ui.allocate_painter(ui.available_size_before_wrap(), Sense::drag());
 
-		let to_screen = emath::RectTransform::from_to(
-			Rect::from_min_size(Pos2::ZERO, response.rect.square_proportions()),
-			response.rect,
-		);
-
-		let from_screen = to_screen.inverse();
-
 		if self.lines.is_empty() {
 			self.lines.push(vec![]);
 		}
@@ -129,10 +122,9 @@ impl MyApp {
 
 		// If we are clicking
 		if let Some(pointer_pos) = response.interact_pointer_pos() {
-			let canvas_pos = from_screen * pointer_pos;
 			// If the current position is different from the last position
-			if current_line.last() != Some(&canvas_pos) {
-				current_line.push(canvas_pos);
+			if current_line.last() != Some(&pointer_pos) {
+				current_line.push(pointer_pos);
 				response.mark_changed();
 			}
 		// If we aren't clicking and the current line isn't empty, then start a new empty line
@@ -143,13 +135,10 @@ impl MyApp {
 		}
 
 		let shapes = self.lines.iter()
+			// Filter out ones that aren't actually lines yet
 			.filter(|line| line.len() >= 2)
-			.map(|line| {
-				// Map from NDC to screen
-				let points: Vec<Pos2> = line.iter().map(|p| to_screen * *p).collect();
-				// Turn it into a polyline shape
-				egui::Shape::line(points, self.stroke)
-			});
+			// Turn it into a polyline shape
+			.map(|line| egui::Shape::line(line.to_vec(), self.stroke));
 
 		painter.extend(shapes);
 
