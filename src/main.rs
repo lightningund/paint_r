@@ -85,7 +85,8 @@ impl eframe::App for MyApp {
 			// 	ui.image(img);
 			// }
 
-			//Originally from https://github.com/emilk/egui/tree/main/crates/egui_demo_lib/src/demo/screenshot.rs
+			// Originally from https://github.com/emilk/egui/tree/main/crates/egui_demo_lib/src/demo/screenshot.rs
+			// Goes off when we had clicked the button to send a screenshot event
 			let image = ui.ctx().input(|i| {
 				i.events.iter()
 					.filter_map(|evt| {
@@ -98,6 +99,7 @@ impl eframe::App for MyApp {
 					.last()
 			});
 
+			// If we took a screenshot this frame, save it into the app data
 			if let Some(image) = image {
 				self.image = Some((
 					image.clone(),
@@ -105,10 +107,12 @@ impl eframe::App for MyApp {
 				));
 			}
 
+			// If we have an image, show it
 			if let Some((_, texture)) = &self.image {
 				Image::new(texture).shrink_to_fit().ui(ui);
 			}
 
+			// Drawing canvas
 			Frame::canvas(ui.style()).show(ui, |ui| {
 				self.ui_content(ui);
 			});
