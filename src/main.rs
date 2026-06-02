@@ -1,7 +1,6 @@
 use std::path::PathBuf;
-use std::sync::Arc;
 use eframe::egui;
-use egui::{Image, Frame, Pos2, Sense, Stroke, Ui, Widget as _, UserData, ViewportCommand};
+use egui::{emath, Rect, Image, Frame, Pos2, Sense, Stroke, Ui, Widget as _, UserData, ViewportCommand, TextureHandle, ColorImage};
 use image::ImageReader;
 
 fn main() -> eframe::Result {
@@ -23,12 +22,12 @@ fn main() -> eframe::Result {
 }
 
 // From https://docs.rs/egui/latest/egui/struct.ColorImage.html
-fn load_image_from_path(path: &PathBuf) -> Result<egui::ColorImage, image::ImageError> {
+fn load_image_from_path(path: &PathBuf) -> Result<ColorImage, image::ImageError> {
 	let image = ImageReader::open(path)?.decode()?;
 	let size = [image.width() as _, image.height() as _];
 	let image_buffer = image.to_rgba8();
 	let pixels = image_buffer.as_flat_samples();
-	Ok(egui::ColorImage::from_rgba_unmultiplied(
+	Ok(ColorImage::from_rgba_unmultiplied(
 		size,
 		pixels.as_slice(),
 	))
@@ -36,22 +35,18 @@ fn load_image_from_path(path: &PathBuf) -> Result<egui::ColorImage, image::Image
 
 #[derive(Default)]
 struct MyApp {
-	// Screen coordinates
+	// In 0-1 NDC
 	lines: Vec<Vec<Pos2>>,
 	stroke: Stroke,
-	image: Option<egui::TextureHandle>,
+	tex: Option<TextureHandle>,
 	picked_path: Option<PathBuf>,
-	img: Option<egui::ColorImage>,
+	img: Option<ColorImage>,
 }
-
-// ui.heading = <h1>
-// ui.label = <p>
 
 impl eframe::App for MyApp {
 	// This is called every time the screen updates
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
 		self.ui_control(ui);
-		ui.label("Paint with your mouse/touch!");
 
 		egui::CentralPanel::default().show_inside(ui, |ui| {
 			// Header
@@ -81,10 +76,6 @@ impl eframe::App for MyApp {
 				});
 			}
 
-			// if let Some(img) = self.img {
-			// 	ui.image(img);
-			// }
-
 			// Originally from https://github.com/emilk/egui/tree/main/crates/egui_demo_lib/src/demo/screenshot.rs
 			// Goes off when we had clicked the button to send a screenshot event
 			let image = ui.ctx().input(|i| {
@@ -102,15 +93,15 @@ impl eframe::App for MyApp {
 			// If we took a screenshot this frame, save it into the app data
 			if let Some(image) = image {
 				// If we have a texture made already, just update it
-				if let Some(tex) = &mut self.image {
+				if let Some(tex) = &mut self.tex {
 					tex.set(image, Default::default());
 				} else {
-					self.image = Some(ui.ctx().load_texture("screenshot_demo", image, Default::default()));
+					self.tex = Some(ui.ctx().load_texture("screenshot_demo", image, Default::default()));
 				}
 			}
 
 			// If we have an image, show it
-			if let Some(texture) = &self.image {
+			if let Some(texture) = &self.tex {
 				Image::new(texture).shrink_to_fit().ui(ui);
 			}
 
@@ -139,6 +130,13 @@ impl MyApp {
 	pub fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
 		let (mut response, painter) = ui.allocate_painter(ui.available_size_before_wrap(), Sense::drag());
 
+		let to_screen = emath::RectTransform::from_to(
+			Rect::from_min_size(Pos2::ZERO, response.rect.square_proportions()),
+			response.rect,
+		);
+
+		let from_screen = to_screen.inverse();
+
 		if self.lines.is_empty() {
 			self.lines.push(vec![]);
 		}
@@ -147,9 +145,10 @@ impl MyApp {
 
 		// If we are clicking
 		if let Some(pointer_pos) = response.interact_pointer_pos() {
+			let canvas_pos = from_screen * pointer_pos;
 			// If the current position is different from the last position
-			if current_line.last() != Some(&pointer_pos) {
-				current_line.push(pointer_pos);
+			if current_line.last() != Some(&canvas_pos) {
+				current_line.push(canvas_pos);
 				response.mark_changed();
 			}
 		// If we aren't clicking and the current line isn't empty, then start a new empty line
@@ -163,7 +162,12 @@ impl MyApp {
 			// Filter out ones that aren't actually lines yet
 			.filter(|line| line.len() >= 2)
 			// Turn it into a polyline shape
-			.map(|line| egui::Shape::line(line.to_vec(), self.stroke));
+			.map(|line| {
+				// Map from NDC to screen
+				let points: Vec<Pos2> = line.iter().map(|p| to_screen * *p).collect();
+				// Turn it into a polyline shape
+				egui::Shape::line(points, self.stroke)
+			});
 
 		painter.extend(shapes);
 
