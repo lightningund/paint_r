@@ -4,8 +4,6 @@ use egui::{emath, vec2, Color32, Context, Frame, Pos2, Rect, Sense, Stroke, Ui, 
 use image::ImageReader;
 
 static IMG_EXTS: [&str; 5] = ["jpg", "jpeg", "png", "bmp", "qoi"];
-static ANIM_EXTS: [&str; 4] = ["webp", "gif", "avif", "apng"];
-static VIDEO_EXTS: [&str; 4] = ["mov", "mp4", "avi", "webm"];
 
 fn is_ext(path_name: &PathBuf, exts: &[&str]) -> bool {
 	if let Some(ext_os) = path_name.extension() && let Some(ext) = ext_os.to_str() {
@@ -16,8 +14,6 @@ fn is_ext(path_name: &PathBuf, exts: &[&str]) -> bool {
 }
 
 fn is_img(path_name: &PathBuf) -> bool { is_ext(path_name, &IMG_EXTS) }
-fn is_anim(path_name: &PathBuf) -> bool { is_ext(path_name, &ANIM_EXTS) }
-fn is_video(path_name: &PathBuf) -> bool { is_ext(path_name, &VIDEO_EXTS) }
 
 fn main() -> eframe::Result {
 	println!("Hello, world!");
@@ -53,9 +49,9 @@ fn load_image_from_path(path: &PathBuf) -> Result<egui::ColorImage, image::Image
 struct MyApp {
     /// in 0-1 normalized coordinates
     lines: Vec<Vec<Pos2>>,
+    stroke: Stroke,
 	picked_path: Option<PathBuf>,
 	img: Option<egui::ColorImage>,
-    stroke: Stroke,
 }
 
 // ui.heading = <h1>
@@ -101,7 +97,7 @@ impl eframe::App for MyApp {
 	}
 }
 
-// Originall from https://github.com/emilk/egui/blob/6c1d695fc66611369f78212e38c2895bc3a7c442/crates/egui_demo_lib/src/demo/painting.rs
+// Originally from https://github.com/emilk/egui/blob/6c1d695fc66611369f78212e38c2895bc3a7c442/crates/egui_demo_lib/src/demo/painting.rs
 impl MyApp {
 	pub fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
 		ui.horizontal(|ui| {
@@ -131,7 +127,7 @@ impl MyApp {
 
 		let current_line = self.lines.last_mut().unwrap();
 
-		// If we are clicking(?)
+		// If we are clicking
 		if let Some(pointer_pos) = response.interact_pointer_pos() {
 			let canvas_pos = from_screen * pointer_pos;
 			// If the current position is different from the last position
@@ -139,17 +135,19 @@ impl MyApp {
 				current_line.push(canvas_pos);
 				response.mark_changed();
 			}
+		// If we aren't clicking and the current line isn't empty, then start a new empty line
 		} else if !current_line.is_empty() {
 			self.lines.push(vec![]);
+			// I feel like this is not needed since creating a new empty line doesn't actually change anything
 			response.mark_changed();
 		}
 
-		let shapes = self
-			.lines
-			.iter()
+		let shapes = self.lines.iter()
 			.filter(|line| line.len() >= 2)
 			.map(|line| {
+				// Map from NDC to screen
 				let points: Vec<Pos2> = line.iter().map(|p| to_screen * *p).collect();
+				// Turn it into a polyline shape
 				egui::Shape::line(points, self.stroke)
 			});
 
