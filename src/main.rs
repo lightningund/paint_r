@@ -1,6 +1,7 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use eframe::egui;
-use egui::{emath, vec2, Color32, Context, Frame, Pos2, Rect, Sense, Stroke, Ui, Window};
+use egui::{Image, Frame, Pos2, Sense, Stroke, Ui, Widget as _, UserData, ViewportCommand};
 use image::ImageReader;
 
 static IMG_EXTS: [&str; 5] = ["jpg", "jpeg", "png", "bmp", "qoi"];
@@ -47,9 +48,10 @@ fn load_image_from_path(path: &PathBuf) -> Result<egui::ColorImage, image::Image
 
 #[derive(Default)]
 struct MyApp {
-    // Screen coordinates
-    lines: Vec<Vec<Pos2>>,
-    stroke: Stroke,
+	// Screen coordinates
+	lines: Vec<Vec<Pos2>>,
+	stroke: Stroke,
+	image: Option<(Arc<egui::ColorImage>, egui::TextureHandle)>,
 	picked_path: Option<PathBuf>,
 	img: Option<egui::ColorImage>,
 }
@@ -60,15 +62,16 @@ struct MyApp {
 impl eframe::App for MyApp {
 	// This is called every time the screen updates
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.ui_control(ui);
-        ui.label("Paint with your mouse/touch!");
-        Frame::canvas(ui.style()).show(ui, |ui| {
-            self.ui_content(ui);
-        });
+		self.ui_control(ui);
+		ui.label("Paint with your mouse/touch!");
 
 		egui::CentralPanel::default().show_inside(ui, |ui| {
 			// Header
 			ui.heading("My egui Application");
+
+            if ui.button("Take Screenshot").clicked() {
+                ui.send_viewport_cmd(ViewportCommand::Screenshot(UserData::default()));
+			}
 
 			// Create a button, and check if it was clicked. Then, with short circuiting,
 			// if it was clicked we create a file dialog and assign it to path based on what the user clicks
@@ -93,11 +96,39 @@ impl eframe::App for MyApp {
 			// if let Some(img) = self.img {
 			// 	ui.image(img);
 			// }
+
+			//Originally from https://github.com/emilk/egui/tree/main/crates/egui_demo_lib/src/demo/screenshot.rs
+			let image = ui.ctx().input(|i| {
+				i.events.iter()
+					.filter_map(|evt| {
+						if let egui::Event::Screenshot{image, ..} = evt {
+							Some(image.clone())
+						} else {
+							None
+						}
+					})
+					.last()
+			});
+
+			if let Some(image) = image {
+				self.image = Some((
+					image.clone(),
+					ui.ctx().load_texture("screenshot_demo", image, Default::default()),
+				));
+			}
+
+			if let Some((_, texture)) = &self.image {
+				Image::new(texture).shrink_to_fit().ui(ui);
+			}
+
+			Frame::canvas(ui.style()).show(ui, |ui| {
+				self.ui_content(ui);
+			});
 		});
 	}
 }
 
-// Originally from https://github.com/emilk/egui/blob/6c1d695fc66611369f78212e38c2895bc3a7c442/crates/egui_demo_lib/src/demo/painting.rs
+// Originally from https://github.com/emilk/egui/tree/main/crates/egui_demo_lib/src/demo/painting.rs
 impl MyApp {
 	pub fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
 		ui.horizontal(|ui| {
