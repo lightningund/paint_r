@@ -4,18 +4,6 @@ use eframe::egui;
 use egui::{Image, Frame, Pos2, Sense, Stroke, Ui, Widget as _, UserData, ViewportCommand};
 use image::ImageReader;
 
-static IMG_EXTS: [&str; 5] = ["jpg", "jpeg", "png", "bmp", "qoi"];
-
-fn is_ext(path_name: &PathBuf, exts: &[&str]) -> bool {
-	if let Some(ext_os) = path_name.extension() && let Some(ext) = ext_os.to_str() {
-		exts.contains(&ext)
-	} else {
-		false
-	}
-}
-
-fn is_img(path_name: &PathBuf) -> bool { is_ext(path_name, &IMG_EXTS) }
-
 fn main() -> eframe::Result {
 	println!("Hello, world!");
 	let options = eframe::NativeOptions {
