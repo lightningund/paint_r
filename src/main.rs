@@ -3,6 +3,13 @@ use eframe::egui;
 use egui::{Ui, TextureHandle, ColorImage, Rect, Widget as _};
 use image::ImageReader;
 
+static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
+	magnification: egui::TextureFilter::Nearest,
+	minification: egui::TextureFilter::Linear,
+	mipmap_mode: None,
+	wrap_mode: egui::TextureWrapMode::ClampToEdge,
+};
+
 fn main() -> eframe::Result {
 	println!("Hello, world!");
 	let options = eframe::NativeOptions {
@@ -40,8 +47,9 @@ fn size_to_rect(size: [usize; 2]) -> Rect {
 
 struct Image {
 	path: PathBuf,
-	handle: TextureHandle,
 	size: Rect,
+	data: ColorImage,
+	handle: TextureHandle,
 }
 
 struct MyApp {
@@ -49,6 +57,7 @@ struct MyApp {
 	// TODO: Make this screen coords, but relative to the drawing frame
 	lines: Vec<Vec<egui::Pos2>>,
 	stroke: egui::Stroke,
+	color: [f32; 3], // RGB 0-1
 	scene_rect: Rect,
 	img: Option<Image>,
 }
@@ -58,6 +67,7 @@ impl Default for MyApp {
 		Self {
 			lines: Default::default(),
 			stroke: Default::default(),
+    		color: [0.0, 0.0, 0.0],
 			scene_rect: Rect::ZERO,
 			img: Default::default(),
 		}
@@ -68,25 +78,28 @@ impl eframe::App for MyApp {
 	// This is called every time the screen updates
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
 		egui::CentralPanel::default().show_inside(ui, |ui| {
+			ui.color_edit_button_rgb(&mut self.color);
+			// Stroke/Brush settings
+			// self.brush_settings(ui);
+
 			// Create a button, and check if it was clicked. Then, with short circuiting,
 			// if it was clicked we create a file dialog and assign it to path based on what the user clicks
 			// This also won't execute inside the block if the user cancels and there is no path
 			if ui.button("Open").clicked() && let Some(path) = rfd::FileDialog::new().pick_file() {
 				if let Ok(image_data) = load_image_from_path(&path) {
+
 					// If we have an image already, just update it
 					if let Some(img) = &mut self.img {
 						img.path = path;
 						img.size = size_to_rect(image_data.size);
-						img.handle.set(image_data, Default::default());
+						img.data = image_data.clone();
+						img.handle.set(image_data, TEX_OPTS);
 					} else {
 						self.img = Some(Image{
 							path,
 							size: size_to_rect(image_data.size),
-							handle: ui.ctx().load_texture("screenshot_demo", image_data, egui::TextureOptions{
-								magnification: egui::TextureFilter::Nearest,
-								minification: egui::TextureFilter::Linear,
-								..Default::default()
-							}),
+							data: image_data.clone(),
+							handle: ui.ctx().load_texture("screenshot_demo", image_data, TEX_OPTS),
 						});
 					}
 
@@ -105,8 +118,6 @@ impl eframe::App for MyApp {
 
 			self.scene_surface(ui);
 
-			// Stroke/Brush settings
-			// self.brush_settings(ui);
 			// Drawing canvas
 			// egui::Frame::canvas(ui.style()).show(ui, |ui| {
 			// 	// If we have an image, show it
@@ -145,7 +156,15 @@ impl MyApp {
 		}
 
 		if let Some(pos) = response.hover_pos() {
-			ui.put(size_to_rect([350, 50]), egui::Label::new(format!("Pointer Pos: {}, {}", pos.x as i32, pos.y as i32)));
+			let coords = [pos.x as usize, pos.y as usize];
+			ui.put(size_to_rect([350, 50]), egui::Label::new(format!("Pointer Pos: {:?}", coords)));
+			if response.clicked() && let Some(img) = &mut self.img {
+				println!("Clicked: {:?}", coords);
+				let color = self.color.map(|v| (v * 255.0) as u8);
+				let idx = coords[0] + coords[1] * img.data.width();
+				img.data.pixels[idx] = egui::Color32::from_rgb(color[0], color[1], color[2]);
+				img.handle.set_partial(coords, img.data.region_by_pixels(coords, [1, 1]), TEX_OPTS);
+			}
 		}
 	}
 

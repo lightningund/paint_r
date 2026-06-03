@@ -8,7 +8,9 @@ Planned features:
 -[X] image loading
 -[X] cursor pixel position readout
 -[ ] image saving
--[ ] pixel by pixel edits
+-[X] pixel by pixel edits
+-[ ] panning/drawing mode switch
+-[ ] dragging to draw
 -[ ] color picker
 -[ ] color palette
 -[ ] layers
