@@ -78,16 +78,21 @@ impl eframe::App for MyApp {
 	// This is called every time the screen updates
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
 		egui::CentralPanel::default().show_inside(ui, |ui| {
-			ui.color_edit_button_rgb(&mut self.color);
+			let mut opening = false;
+			let mut saving = false;
+			ui.horizontal(|ui| {
+				opening = ui.button("Open").clicked();
+				saving = ui.add_enabled(self.img.is_some(), egui::Button::new("Save")).clicked();
+				ui.color_edit_button_rgb(&mut self.color);
+			});
 			// Stroke/Brush settings
 			// self.brush_settings(ui);
 
 			// Create a button, and check if it was clicked. Then, with short circuiting,
 			// if it was clicked we create a file dialog and assign it to path based on what the user clicks
 			// This also won't execute inside the block if the user cancels and there is no path
-			if ui.button("Open").clicked() && let Some(path) = rfd::FileDialog::new().pick_file() {
+			if opening && let Some(path) = rfd::FileDialog::new().pick_file() {
 				if let Ok(image_data) = load_image_from_path(&path) {
-
 					// If we have an image already, just update it
 					if let Some(img) = &mut self.img {
 						img.path = path;
@@ -105,6 +110,28 @@ impl eframe::App for MyApp {
 
 					// force a zoom reset
 					self.scene_rect = Rect::NAN;
+				}
+			}
+
+			if saving && let Some(img) = &self.img {
+				if let Some(path) = rfd::FileDialog::new()
+					.set_directory(img.path.parent().map(|p| p.to_path_buf()).unwrap_or(Default::default()))
+					.set_file_name(img.path.file_name().and_then(|f| f.to_str()).unwrap_or("image.png"))
+					.save_file() {
+					// TODO: impl Pixel for Color32 so that I don't need to do the mapping
+					let buf_opt = image::ImageBuffer::<image::Rgba<u8>, _>::from_vec(
+						img.data.width() as u32,
+						img.data.height() as u32,
+						img.data.pixels.iter().map(|col| col.to_array()).flatten().collect()
+					);
+					if let Some(buf) = buf_opt {
+						let res = buf.save(path);
+						if let Err(err) = res {
+							println!("Saving didn't work :( {}", err);
+						}
+					} else {
+						println!("Making the buffer didn't work :(");
+					}
 				}
 			}
 

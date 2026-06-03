@@ -7,7 +7,7 @@ Planned features:
 -[X] panning
 -[X] image loading
 -[X] cursor pixel position readout
--[ ] image saving
+-[X] image saving
 -[X] pixel by pixel edits
 -[ ] panning/drawing mode switch
 -[ ] dragging to draw
