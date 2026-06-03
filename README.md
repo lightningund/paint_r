@@ -6,6 +6,7 @@ Planned features:
 -[X] zooming
 -[X] panning
 -[X] image loading
+-[X] cursor pixel position readout
 -[ ] image saving
 -[ ] pixel by pixel edits
 -[ ] color picker

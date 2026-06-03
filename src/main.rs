@@ -68,8 +68,6 @@ impl eframe::App for MyApp {
 	// This is called every time the screen updates
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
 		egui::CentralPanel::default().show_inside(ui, |ui| {
-			self.brush_settings(ui);
-
 			// Create a button, and check if it was clicked. Then, with short circuiting,
 			// if it was clicked we create a file dialog and assign it to path based on what the user clicks
 			// This also won't execute inside the block if the user cancels and there is no path
@@ -91,6 +89,9 @@ impl eframe::App for MyApp {
 							}),
 						});
 					}
+
+					// force a zoom reset
+					self.scene_rect = Rect::NAN;
 				}
 			}
 
@@ -104,6 +105,8 @@ impl eframe::App for MyApp {
 
 			self.scene_surface(ui);
 
+			// Stroke/Brush settings
+			// self.brush_settings(ui);
 			// Drawing canvas
 			// egui::Frame::canvas(ui.style()).show(ui, |ui| {
 			// 	// If we have an image, show it
@@ -119,35 +122,31 @@ impl eframe::App for MyApp {
 
 impl MyApp {
 	fn scene_surface(&mut self, ui: &mut Ui) {
-		ui.label("You can pan by scrolling, and zoom using cmd-scroll. Double click on the background to reset view.");
-		ui.separator();
-
 		ui.label(format!("Scene rect: {:#?}", self.scene_rect));
 		ui.separator();
 
-		egui::Frame::group(ui.style())
-			.inner_margin(0.0)
-			.show(ui, |ui| {
-				let scene = egui::Scene::new().zoom_range(0.0..=f32::INFINITY);
+		let scene = egui::Scene::new()
+			.zoom_range(0.0..=f32::INFINITY);
 
-				let mut inner_rect = Rect::NAN;
-				let response = scene
-					.show(ui, &mut self.scene_rect, |ui| {
-						if let Some(img) = &self.img {
-							egui::Image::new(&img.handle).ui(ui);
-						} else {
-							ui.label("Load an image!");
-						}
-
-						inner_rect = ui.min_rect();
-					})
-					.response;
-
-				// Reset the view to be exactly large enough to contain the contents
-				if response.double_clicked() {
-					self.scene_rect = inner_rect;
+		let mut inner_rect = Rect::NAN;
+		let response = scene
+			.show(ui, &mut self.scene_rect, |ui| {
+				if let Some(img) = &self.img {
+					egui::Image::new(&img.handle).ui(ui);
 				}
-			});
+
+				inner_rect = ui.min_rect();
+			})
+			.response;
+
+		// Reset the view to be exactly large enough to contain the contents
+		if response.double_clicked() {
+			self.scene_rect = inner_rect;
+		}
+
+		if let Some(pos) = response.hover_pos() {
+			ui.put(size_to_rect([350, 50]), egui::Label::new(format!("Pointer Pos: {:?}", pos)));
+		}
 	}
 
 	fn brush_settings(&mut self, ui: &mut Ui) -> egui::Response {
