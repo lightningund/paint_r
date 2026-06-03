@@ -1,6 +1,6 @@
 X image display
-zooming
-panning
+X zooming
+X panning
 X image loading
 image saving
 pixel by pixel edits

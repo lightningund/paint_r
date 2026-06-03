@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use eframe::egui;
-use egui::{Ui, TextureHandle, ColorImage};
+use egui::{Ui, TextureHandle, ColorImage, Rect, Widget as _};
 use image::ImageReader;
 
 fn main() -> eframe::Result {
@@ -33,17 +33,24 @@ fn load_image_from_path(path: &PathBuf) -> Result<ColorImage, image::ImageError>
 	))
 }
 
+// There's gotta be a better way to do this lmao
+fn size_to_rect(size: [usize; 2]) -> Rect {
+	Rect::with_max_x(Rect::with_max_y(Rect::ZERO, size[1] as f32), size[0] as f32)
+}
+
+struct Image {
+	path: PathBuf,
+	handle: TextureHandle,
+	size: Rect,
+}
+
 struct MyApp {
 	// In 0-1 NDC
 	// TODO: Make this screen coords, but relative to the drawing frame
 	lines: Vec<Vec<egui::Pos2>>,
 	stroke: egui::Stroke,
-	tex: Option<TextureHandle>,
-	picked_path: Option<PathBuf>,
-	img: Option<ColorImage>,
-    transform: egui::emath::TSTransform,
-    drag_value: f32,
-    scene_rect: egui::Rect,
+	scene_rect: Rect,
+	img: Option<Image>,
 }
 
 impl Default for MyApp {
@@ -51,12 +58,8 @@ impl Default for MyApp {
 		Self {
 			lines: Default::default(),
 			stroke: Default::default(),
-			tex: Default::default(),
-			picked_path: Default::default(),
+			scene_rect: Rect::ZERO,
 			img: Default::default(),
-			transform: Default::default(),
-			drag_value: Default::default(),
-			scene_rect: egui::Rect::ZERO,
 		}
 	}
 }
@@ -71,89 +74,80 @@ impl eframe::App for MyApp {
 			// if it was clicked we create a file dialog and assign it to path based on what the user clicks
 			// This also won't execute inside the block if the user cancels and there is no path
 			if ui.button("Open").clicked() && let Some(path) = rfd::FileDialog::new().pick_file() {
-				if let Ok(img) = load_image_from_path(&path) {
-					self.img = Some(img);
+				if let Ok(image_data) = load_image_from_path(&path) {
+					// If we have an image already, just update it
+					if let Some(img) = &mut self.img {
+						img.path = path;
+						img.size = size_to_rect(image_data.size);
+						img.handle.set(image_data, Default::default());
+					} else {
+						self.img = Some(Image{
+							path,
+							size: size_to_rect(image_data.size),
+							handle: ui.ctx().load_texture("screenshot_demo", image_data, egui::TextureOptions{
+								magnification: egui::TextureFilter::Nearest,
+								minification: egui::TextureFilter::Linear,
+								..Default::default()
+							}),
+						});
+					}
 				}
-
-				self.picked_path = Some(path);
 			}
 
-			// If self.picked_path is assigned
-			if let Some(picked_path) = &self.picked_path {
+			if let Some(img) = &self.img {
 				// Add a label and the path itself on the same line
 				ui.horizontal(|ui| {
 					ui.label("Picked File:");
-					ui.monospace(picked_path.display().to_string());
+					ui.monospace(img.path.display().to_string());
 				});
-			}
-
-			// If we took a screenshot this frame, save it into the app data
-			if let Some(image) = self.img.take() {
-				// If we have a texture made already, just update it
-				if let Some(tex) = &mut self.tex {
-					tex.set(image, Default::default());
-				} else {
-					self.tex = Some(ui.ctx().load_texture("screenshot_demo", image, Default::default()));
-				}
 			}
 
 			self.scene_surface(ui);
 
 			// Drawing canvas
-			egui::Frame::canvas(ui.style()).show(ui, |ui| {
-				// If we have an image, show it
-				if let Some(texture) = &self.tex {
-					egui::Image::new(texture).paint_at(ui, ui.available_rect_before_wrap());
-				}
+			// egui::Frame::canvas(ui.style()).show(ui, |ui| {
+			// 	// If we have an image, show it
+			// 	if let Some(texture) = &self.tex {
+			// 		egui::Image::new(texture).paint_at(ui, ui.available_rect_before_wrap());
+			// 	}
 
-				self.drawing_surface(ui);
-			});
+			// 	self.drawing_surface(ui);
+			// });
 		});
 	}
 }
 
 impl MyApp {
 	fn scene_surface(&mut self, ui: &mut Ui) {
-		ui.label(
-            "You can pan by scrolling, and zoom using cmd-scroll. \
-            Double click on the background to reset view.",
-        );
-        ui.separator();
+		ui.label("You can pan by scrolling, and zoom using cmd-scroll. Double click on the background to reset view.");
+		ui.separator();
 
-        ui.label(format!("Scene rect: {:#?}", self.scene_rect));
+		ui.label(format!("Scene rect: {:#?}", self.scene_rect));
+		ui.separator();
 
-        ui.separator();
+		egui::Frame::group(ui.style())
+			.inner_margin(0.0)
+			.show(ui, |ui| {
+				let scene = egui::Scene::new().zoom_range(0.0..=f32::INFINITY);
 
-        egui::Frame::group(ui.style())
-            .inner_margin(0.0)
-            .show(ui, |ui| {
-                let scene = egui::Scene::new()
-                    .max_inner_size([350.0, 1000.0])
-                    .zoom_range(0.1..=2.0);
+				let mut inner_rect = Rect::NAN;
+				let response = scene
+					.show(ui, &mut self.scene_rect, |ui| {
+						if let Some(img) = &self.img {
+							egui::Image::new(&img.handle).ui(ui);
+						} else {
+							ui.label("Load an image!");
+						}
 
-                let mut reset_view = false;
-                let mut inner_rect = egui::Rect::NAN;
-                let response = scene
-                    .show(ui, &mut self.scene_rect, |ui| {
-                        reset_view = ui.button("Reset view").clicked();
+						inner_rect = ui.min_rect();
+					})
+					.response;
 
-                        ui.add_space(16.0);
-
-						// Draw stuff
-
-                        ui.put(
-                            egui::Rect::from_min_size(egui::Pos2::new(0.0, -64.0), egui::Vec2::new(200.0, 16.0)),
-                            egui::Label::new("You can put a widget anywhere").selectable(false),
-                        );
-
-                        inner_rect = ui.min_rect();
-                    })
-                    .response;
-
-                if reset_view || response.double_clicked() {
-                    self.scene_rect = inner_rect;
-                }
-            });
+				// Reset the view to be exactly large enough to contain the contents
+				if response.double_clicked() {
+					self.scene_rect = inner_rect;
+				}
+			});
 	}
 
 	fn brush_settings(&mut self, ui: &mut Ui) -> egui::Response {
@@ -172,7 +166,7 @@ impl MyApp {
 		let (mut response, painter) = ui.allocate_painter(ui.available_size_before_wrap(), egui::Sense::drag());
 
 		let to_screen = egui::emath::RectTransform::from_to(
-			egui::Rect::from_min_size(egui::Pos2::ZERO, response.rect.square_proportions()),
+			Rect::from_min_size(egui::Pos2::ZERO, response.rect.square_proportions()),
 			response.rect,
 		);
 
