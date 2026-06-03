@@ -53,10 +53,6 @@ struct Image {
 }
 
 struct MyApp {
-	// In 0-1 NDC
-	// TODO: Make this screen coords, but relative to the drawing frame
-	lines: Vec<Vec<egui::Pos2>>,
-	stroke: egui::Stroke,
 	color: [f32; 3], // RGB 0-1
 	scene_rect: Rect,
 	img: Option<Image>,
@@ -66,8 +62,6 @@ struct MyApp {
 impl Default for MyApp {
 	fn default() -> Self {
 		Self {
-			lines: Default::default(),
-			stroke: Default::default(),
     		color: [0.0, 0.0, 0.0],
 			scene_rect: Rect::ZERO,
 			img: Default::default(),
@@ -87,8 +81,6 @@ impl eframe::App for MyApp {
 				saving = ui.add_enabled(self.img.is_some(), egui::Button::new("Save")).clicked();
 				ui.color_edit_button_rgb(&mut self.color);
 			});
-			// Stroke/Brush settings
-			// self.brush_settings(ui);
 
 			// Create a button, and check if it was clicked. Then, with short circuiting,
 			// if it was clicked we create a file dialog and assign it to path based on what the user clicks
@@ -146,16 +138,6 @@ impl eframe::App for MyApp {
 			}
 
 			self.scene_surface(ui);
-
-			// Drawing canvas
-			// egui::Frame::canvas(ui.style()).show(ui, |ui| {
-			// 	// If we have an image, show it
-			// 	if let Some(texture) = &self.tex {
-			// 		egui::Image::new(texture).paint_at(ui, ui.available_rect_before_wrap());
-			// 	}
-
-			// 	self.drawing_surface(ui);
-			// });
 		});
 	}
 }
@@ -209,64 +191,5 @@ impl MyApp {
 		} else {
 			self.last_coord = [usize::MAX, usize::MAX];
 		}
-	}
-
-	fn brush_settings(&mut self, ui: &mut Ui) -> egui::Response {
-		ui.horizontal(|ui| {
-			ui.label("Stroke:");
-			ui.add(&mut self.stroke);
-			ui.separator();
-			if ui.button("Clear Painting").clicked() {
-				self.lines.clear();
-			}
-		})
-		.response
-	}
-
-	fn drawing_surface(&mut self, ui: &mut Ui) -> egui::Response {
-		let (mut response, painter) = ui.allocate_painter(ui.available_size_before_wrap(), egui::Sense::drag());
-
-		let to_screen = egui::emath::RectTransform::from_to(
-			Rect::from_min_size(egui::Pos2::ZERO, response.rect.square_proportions()),
-			response.rect,
-		);
-
-		let from_screen = to_screen.inverse();
-
-		if self.lines.is_empty() {
-			self.lines.push(vec![]);
-		}
-
-		let current_line = self.lines.last_mut().unwrap();
-
-		// If we are clicking
-		if let Some(pointer_pos) = response.interact_pointer_pos() {
-			let canvas_pos = from_screen * pointer_pos;
-			// If the current position is different from the last position
-			if current_line.last() != Some(&canvas_pos) {
-				current_line.push(canvas_pos);
-				response.mark_changed();
-			}
-		// If we aren't clicking and the current line isn't empty, then start a new empty line
-		} else if !current_line.is_empty() {
-			self.lines.push(vec![]);
-			// I feel like this is not needed since creating a new empty line doesn't actually change anything
-			response.mark_changed();
-		}
-
-		let shapes = self.lines.iter()
-			// Filter out ones that aren't actually lines yet
-			.filter(|line| line.len() >= 2)
-			// Turn it into a polyline shape
-			.map(|line| {
-				// Map from NDC to screen
-				let points: Vec<egui::Pos2> = line.iter().map(|p| to_screen * *p).collect();
-				// Turn it into a polyline shape
-				egui::Shape::line(points, self.stroke)
-			});
-
-		painter.extend(shapes);
-
-		response
 	}
 }
