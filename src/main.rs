@@ -54,6 +54,7 @@ struct Image {
 
 struct MyApp {
 	color: [f32; 3], // RGB 0-1
+	secondary: [f32; 3],
 	scene_rect: Rect,
 	img: Option<Image>,
 	last_coord: [usize; 2], // The coordinate of the last pixel we modified while dragging
@@ -63,6 +64,7 @@ impl Default for MyApp {
 	fn default() -> Self {
 		Self {
     		color: [0.0, 0.0, 0.0],
+    		secondary: [0.0, 0.0, 0.0],
 			scene_rect: Rect::ZERO,
 			img: Default::default(),
     		last_coord: [usize::MAX, usize::MAX],
@@ -80,6 +82,8 @@ impl eframe::App for MyApp {
 				opening = ui.button("Open").clicked();
 				saving = ui.add_enabled(self.img.is_some(), egui::Button::new("Save")).clicked();
 				ui.color_edit_button_rgb(&mut self.color);
+				ui.label("/");
+				ui.color_edit_button_rgb(&mut self.secondary);
 			});
 
 			// Create a button, and check if it was clicked. Then, with short circuiting,
@@ -148,6 +152,7 @@ impl MyApp {
 		ui.separator();
 
 		let scene = egui::Scene::new()
+			.sense(egui::Sense::DRAG)
 			.drag_pan_buttons(egui::DragPanButtons::MIDDLE)
 			.zoom_range(0.0..=f32::INFINITY);
 
@@ -167,29 +172,30 @@ impl MyApp {
 			self.scene_rect = inner_rect;
 		}
 
-		// The position readout works on hover
 		if let Some(pos) = response.hover_pos() {
+			// The position readout works on hover
 			let coords = [pos.x as i32, pos.y as i32];
 			if coords[0] >= 0 && coords[1] >= 0 {
 				ui.put(size_to_rect([350, 50]), egui::Label::new(format!("Pointer Pos: {:?}", coords)));
 			}
-		}
 
-		// The drawing on click/drag
-		if let Some(pos) = response.interact_pointer_pos() {
-			let coords = [pos.x as usize, pos.y as usize];
-			if coords != self.last_coord {
-				if let Some(img) = &mut self.img && coords[0] < img.data.width() && coords[1] < img.data.height() {
-					println!("Clicked: {:?}", coords);
-					self.last_coord = coords;
-					let color = self.color.map(|v| (v * 255.0) as u8);
-					let idx = coords[0] + coords[1] * img.data.width();
-					img.data.pixels[idx] = egui::Color32::from_rgb(color[0], color[1], color[2]);
-					img.handle.set_partial(coords, img.data.region_by_pixels(coords, [1, 1]), TEX_OPTS);
+			// The drawing on drag
+			if response.dragged_by(egui::PointerButton::Primary) || response.dragged_by(egui::PointerButton::Secondary) {
+				let coords = [pos.x as usize, pos.y as usize];
+				if coords != self.last_coord {
+					if let Some(img) = &mut self.img && coords[0] < img.data.width() && coords[1] < img.data.height() {
+						println!("Clicked: {:?}", coords);
+						self.last_coord = coords;
+						let primary = response.dragged_by(egui::PointerButton::Primary);
+						let color = if primary { self.color } else { self.secondary }.map(|v| (v * 255.0) as u8);
+						let idx = coords[0] + coords[1] * img.data.width();
+						img.data.pixels[idx] = egui::Color32::from_rgb(color[0], color[1], color[2]);
+						img.handle.set_partial(coords, img.data.region_by_pixels(coords, [1, 1]), TEX_OPTS);
+					}
 				}
+			} else {
+				self.last_coord = [usize::MAX, usize::MAX];
 			}
-		} else {
-			self.last_coord = [usize::MAX, usize::MAX];
 		}
 	}
 }
