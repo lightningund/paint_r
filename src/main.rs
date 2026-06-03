@@ -164,6 +164,7 @@ impl MyApp {
 		ui.separator();
 
 		let scene = egui::Scene::new()
+			.drag_pan_buttons(egui::DragPanButtons::MIDDLE)
 			.zoom_range(0.0..=f32::INFINITY);
 
 		let mut inner_rect = Rect::NAN;

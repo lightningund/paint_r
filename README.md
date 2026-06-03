@@ -9,7 +9,7 @@ Planned features:
 -[X] cursor pixel position readout
 -[X] image saving
 -[X] pixel by pixel edits
--[ ] panning/drawing mode switch
+-[ ] unsaved exit warning
 -[ ] dragging to draw
 -[ ] color picker
 -[ ] color palette
