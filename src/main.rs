@@ -145,7 +145,7 @@ impl MyApp {
 		}
 
 		if let Some(pos) = response.hover_pos() {
-			ui.put(size_to_rect([350, 50]), egui::Label::new(format!("Pointer Pos: {:?}", pos)));
+			ui.put(size_to_rect([350, 50]), egui::Label::new(format!("Pointer Pos: {}, {}", pos.x as i32, pos.y as i32)));
 		}
 	}
 
