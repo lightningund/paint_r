@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use eframe::egui;
-use egui::{emath, Rect, Image, Frame, Pos2, Sense, Stroke, Ui, Widget as _, UserData, ViewportCommand, TextureHandle, ColorImage};
+use egui::{Ui, TextureHandle, ColorImage};
 use image::ImageReader;
 
 fn main() -> eframe::Result {
@@ -33,22 +33,39 @@ fn load_image_from_path(path: &PathBuf) -> Result<ColorImage, image::ImageError>
 	))
 }
 
-#[derive(Default)]
 struct MyApp {
 	// In 0-1 NDC
 	// TODO: Make this screen coords, but relative to the drawing frame
-	lines: Vec<Vec<Pos2>>,
-	stroke: Stroke,
+	lines: Vec<Vec<egui::Pos2>>,
+	stroke: egui::Stroke,
 	tex: Option<TextureHandle>,
 	picked_path: Option<PathBuf>,
 	img: Option<ColorImage>,
+    transform: egui::emath::TSTransform,
+    drag_value: f32,
+    scene_rect: egui::Rect,
+}
+
+impl Default for MyApp {
+	fn default() -> Self {
+		Self {
+			lines: Default::default(),
+			stroke: Default::default(),
+			tex: Default::default(),
+			picked_path: Default::default(),
+			img: Default::default(),
+			transform: Default::default(),
+			drag_value: Default::default(),
+			scene_rect: egui::Rect::ZERO,
+		}
+	}
 }
 
 impl eframe::App for MyApp {
 	// This is called every time the screen updates
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
 		egui::CentralPanel::default().show_inside(ui, |ui| {
-			self.ui_control(ui);
+			self.brush_settings(ui);
 
 			// Create a button, and check if it was clicked. Then, with short circuiting,
 			// if it was clicked we create a file dialog and assign it to path based on what the user clicks
@@ -80,23 +97,66 @@ impl eframe::App for MyApp {
 				}
 			}
 
+			self.scene_surface(ui);
+
 			// Drawing canvas
-			Frame::canvas(ui.style()).show(ui, |ui| {
+			egui::Frame::canvas(ui.style()).show(ui, |ui| {
 				// If we have an image, show it
 				if let Some(texture) = &self.tex {
-					Image::new(texture).paint_at(ui, ui.available_rect_before_wrap());
-					// Image::new(texture).shrink_to_fit().ui(ui);
+					egui::Image::new(texture).paint_at(ui, ui.available_rect_before_wrap());
 				}
 
-				self.ui_content(ui);
+				self.drawing_surface(ui);
 			});
 		});
 	}
 }
 
-// Originally from https://github.com/emilk/egui/tree/main/crates/egui_demo_lib/src/demo/painting.rs
 impl MyApp {
-	fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
+	fn scene_surface(&mut self, ui: &mut Ui) {
+		ui.label(
+            "You can pan by scrolling, and zoom using cmd-scroll. \
+            Double click on the background to reset view.",
+        );
+        ui.separator();
+
+        ui.label(format!("Scene rect: {:#?}", self.scene_rect));
+
+        ui.separator();
+
+        egui::Frame::group(ui.style())
+            .inner_margin(0.0)
+            .show(ui, |ui| {
+                let scene = egui::Scene::new()
+                    .max_inner_size([350.0, 1000.0])
+                    .zoom_range(0.1..=2.0);
+
+                let mut reset_view = false;
+                let mut inner_rect = egui::Rect::NAN;
+                let response = scene
+                    .show(ui, &mut self.scene_rect, |ui| {
+                        reset_view = ui.button("Reset view").clicked();
+
+                        ui.add_space(16.0);
+
+						// Draw stuff
+
+                        ui.put(
+                            egui::Rect::from_min_size(egui::Pos2::new(0.0, -64.0), egui::Vec2::new(200.0, 16.0)),
+                            egui::Label::new("You can put a widget anywhere").selectable(false),
+                        );
+
+                        inner_rect = ui.min_rect();
+                    })
+                    .response;
+
+                if reset_view || response.double_clicked() {
+                    self.scene_rect = inner_rect;
+                }
+            });
+	}
+
+	fn brush_settings(&mut self, ui: &mut Ui) -> egui::Response {
 		ui.horizontal(|ui| {
 			ui.label("Stroke:");
 			ui.add(&mut self.stroke);
@@ -108,11 +168,11 @@ impl MyApp {
 		.response
 	}
 
-	fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
-		let (mut response, painter) = ui.allocate_painter(ui.available_size_before_wrap(), Sense::drag());
+	fn drawing_surface(&mut self, ui: &mut Ui) -> egui::Response {
+		let (mut response, painter) = ui.allocate_painter(ui.available_size_before_wrap(), egui::Sense::drag());
 
-		let to_screen = emath::RectTransform::from_to(
-			Rect::from_min_size(Pos2::ZERO, response.rect.square_proportions()),
+		let to_screen = egui::emath::RectTransform::from_to(
+			egui::Rect::from_min_size(egui::Pos2::ZERO, response.rect.square_proportions()),
 			response.rect,
 		);
 
@@ -145,7 +205,7 @@ impl MyApp {
 			// Turn it into a polyline shape
 			.map(|line| {
 				// Map from NDC to screen
-				let points: Vec<Pos2> = line.iter().map(|p| to_screen * *p).collect();
+				let points: Vec<egui::Pos2> = line.iter().map(|p| to_screen * *p).collect();
 				// Turn it into a polyline shape
 				egui::Shape::line(points, self.stroke)
 			});
