@@ -60,6 +60,7 @@ struct MyApp {
 	color: [f32; 3], // RGB 0-1
 	scene_rect: Rect,
 	img: Option<Image>,
+	last_coord: [usize; 2], // The coordinate of the last pixel we modified while dragging
 }
 
 impl Default for MyApp {
@@ -70,6 +71,7 @@ impl Default for MyApp {
     		color: [0.0, 0.0, 0.0],
 			scene_rect: Rect::ZERO,
 			img: Default::default(),
+    		last_coord: [usize::MAX, usize::MAX],
 		}
 	}
 }
@@ -183,16 +185,29 @@ impl MyApp {
 			self.scene_rect = inner_rect;
 		}
 
+		// The position readout works on hover
 		if let Some(pos) = response.hover_pos() {
-			let coords = [pos.x as usize, pos.y as usize];
-			ui.put(size_to_rect([350, 50]), egui::Label::new(format!("Pointer Pos: {:?}", coords)));
-			if response.clicked() && let Some(img) = &mut self.img {
-				println!("Clicked: {:?}", coords);
-				let color = self.color.map(|v| (v * 255.0) as u8);
-				let idx = coords[0] + coords[1] * img.data.width();
-				img.data.pixels[idx] = egui::Color32::from_rgb(color[0], color[1], color[2]);
-				img.handle.set_partial(coords, img.data.region_by_pixels(coords, [1, 1]), TEX_OPTS);
+			let coords = [pos.x as i32, pos.y as i32];
+			if coords[0] >= 0 && coords[1] >= 0 {
+				ui.put(size_to_rect([350, 50]), egui::Label::new(format!("Pointer Pos: {:?}", coords)));
 			}
+		}
+
+		// The drawing on click/drag
+		if let Some(pos) = response.interact_pointer_pos() {
+			let coords = [pos.x as usize, pos.y as usize];
+			if coords != self.last_coord {
+				if let Some(img) = &mut self.img && coords[0] < img.data.width() && coords[1] < img.data.height() {
+					println!("Clicked: {:?}", coords);
+					self.last_coord = coords;
+					let color = self.color.map(|v| (v * 255.0) as u8);
+					let idx = coords[0] + coords[1] * img.data.width();
+					img.data.pixels[idx] = egui::Color32::from_rgb(color[0], color[1], color[2]);
+					img.handle.set_partial(coords, img.data.region_by_pixels(coords, [1, 1]), TEX_OPTS);
+				}
+			}
+		} else {
+			self.last_coord = [usize::MAX, usize::MAX];
 		}
 	}
 

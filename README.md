@@ -10,8 +10,8 @@ Planned features:
 -[X] image saving
 -[X] pixel by pixel edits
 -[ ] unsaved exit warning
--[ ] dragging to draw
--[ ] color picker
+-[X] dragging to draw
+-[X] color picker
 -[ ] color palette
 -[ ] layers
 -[ ] layer enabling
