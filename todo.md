@@ -1,7 +1,7 @@
-image display
+X image display
 zooming
 panning
-image loading
+X image loading
 image saving
 pixel by pixel edits
 color picker
