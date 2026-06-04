@@ -1,5 +1,5 @@
-use std::path::PathBuf;
-use eframe::egui::{self, Color32};
+use std::path::{Path, PathBuf};
+use eframe::egui::{self, Color32, Pos2};
 use egui::{Ui, TextureHandle, ColorImage, Rect, Widget as _, util::undoer::Undoer};
 use image::ImageReader;
 
@@ -28,7 +28,7 @@ fn main() -> eframe::Result {
 }
 
 // From https://docs.rs/egui/latest/egui/struct.ColorImage.html
-fn load_image_from_path(path: &PathBuf) -> Result<ColorImage, image::ImageError> {
+fn load_image_from_path(path: &Path) -> Result<ColorImage, image::ImageError> {
 	let image = ImageReader::open(path)?.decode()?;
 	let size = [image.width() as _, image.height() as _];
 	let image_buffer = image.to_rgba8();
@@ -39,9 +39,37 @@ fn load_image_from_path(path: &PathBuf) -> Result<ColorImage, image::ImageError>
 	))
 }
 
-// There's gotta be a better way to do this lmao
 fn size_to_rect(size: [usize; 2]) -> Rect {
-	Rect::with_max_x(Rect::with_max_y(Rect::ZERO, size[1] as f32), size[0] as f32)
+	Rect::from_two_pos(Pos2::ZERO, Pos2::new(size[0] as f32, size[1] as f32))
+}
+
+struct TextureImage {
+	path: PathBuf,
+	size: Rect,
+	data: ColorImage,
+	handle: TextureHandle,
+	undoer: Undoer<ColorImage>,
+}
+
+impl TextureImage {
+	// TODO: Don't clone the entire picture twice every undo/redo??
+	fn undo(&mut self) {
+		if let Some(state) = self.undoer.undo(&self.data) {
+			self.data = state.clone();
+			self.handle.set(self.data.clone(), TEX_OPTS);
+		}
+	}
+
+	fn redo(&mut self) {
+		if let Some(state) = self.undoer.redo(&self.data) {
+			self.data = state.clone();
+			self.handle.set(self.data.clone(), TEX_OPTS);
+		}
+	}
+
+	fn save_state(&mut self) {
+		self.undoer.add_undo(&self.data);
+	}
 }
 
 #[derive(Default, Debug)]
@@ -50,39 +78,16 @@ struct ImageCreator {
 	height: String,
 }
 
-struct Image {
-	path: PathBuf,
-	size: Rect,
-	data: ColorImage,
-	handle: TextureHandle,
-	undoer: Undoer<ColorImage>,
-}
-
-impl Image {
-	// TODO: Don't clone the entire picture twice every undo/redo??
-	fn undo(&mut self) {
-		self.undoer.undo(&self.data).and_then(|state| Some(self.data = state.clone()));
-		self.handle.set(self.data.clone(), TEX_OPTS);
-	}
-
-	fn redo(&mut self) {
-		self.undoer.redo(&self.data).and_then(|state| Some(self.data = state.clone()));
-		self.handle.set(self.data.clone(), TEX_OPTS);
-	}
-
-	fn save_state(&mut self) {
-		self.undoer.add_undo(&self.data);
-	}
-}
+type Color = [u8; 3];
 
 struct MyApp {
 	creating_img: Option<ImageCreator>, // If we currently have the create new image dialog up
 	save_after_release: bool, // Whether to save the undo state after each pixel or only when you stop clicking
-	color: [f32; 3], // RGB 0-1
-	secondary: [f32; 3],
+	color: Color, // RGB 0-255
+	secondary: Color,
 	scene_rect: Rect,
-	img: Option<Image>,
-	last_coord: [usize; 2], // The coordinate of the last pixel we modified while dragging
+	img: Option<TextureImage>,
+	last_coord: Option<[usize; 2]>, // The coordinate of the last pixel we modified while dragging
 }
 
 impl Default for MyApp {
@@ -90,13 +95,20 @@ impl Default for MyApp {
 		Self {
 			creating_img: None,
 			save_after_release: false,
-			color: [0.0, 0.0, 0.0],
-			secondary: [0.0, 0.0, 0.0],
+			color: [0, 0, 0],
+			secondary: [0, 0, 0],
 			scene_rect: Rect::ZERO,
 			img: Default::default(),
-			last_coord: [usize::MAX, usize::MAX],
+			last_coord: None,
 		}
 	}
+}
+
+fn u8_color_picker(ui: &mut Ui, col: &mut Color) -> egui::Response {
+	let mut fcol = col.map(|v| (v as f32) / 255.0);
+	let res = ui.color_edit_button_rgb(&mut fcol);
+	*col = fcol.map(|v| (v * 255.0) as u8);
+	res
 }
 
 impl eframe::App for MyApp {
@@ -109,9 +121,9 @@ impl eframe::App for MyApp {
 				if ui.button("New").clicked() { self.creating_img = Some(Default::default()); }
 				opening = ui.button("Open").clicked();
 				saving = ui.add_enabled(self.img.is_some(), egui::Button::new("Save")).clicked();
-				ui.color_edit_button_rgb(&mut self.color);
+				u8_color_picker(ui, &mut self.color);
 				ui.label("/");
-				ui.color_edit_button_rgb(&mut self.secondary);
+				u8_color_picker(ui, &mut self.secondary);
 
 				if let Some(img) = &mut self.img {
 					if ui.add_enabled(img.undoer.has_undo(&img.data), egui::Button::new("Undo")).clicked() {
@@ -139,7 +151,7 @@ impl eframe::App for MyApp {
 
 					if ui.button("Create").clicked() {
 						if let Ok(w) = creator.width.parse() && let Ok(h) = creator.height.parse() {
-							self.assign_img(ui.ctx(), ColorImage::filled([w, h], Color32::WHITE), &Default::default());
+							self.assign_img(ui.ctx(), ColorImage::filled([w, h], Color32::WHITE), Path::new(""));
 							created = true;
 						} else {
 							println!("Please enter only numbers");
@@ -163,26 +175,7 @@ impl eframe::App for MyApp {
 				}
 			}
 
-			if saving && let Some(img) = &self.img {
-				if let Some(path) = rfd::FileDialog::new()
-					.set_directory(img.path.parent().map(|p| p.to_path_buf()).unwrap_or(Default::default()))
-					.set_file_name(img.path.file_name().and_then(|f| f.to_str()).unwrap_or("image.png"))
-					.save_file() {
-					let buf_opt = image::ImageBuffer::<image::Rgba<u8>, _>::from_vec(
-						img.data.width() as u32,
-						img.data.height() as u32,
-						img.data.pixels.iter().map(|col| col.to_array()).flatten().collect()
-					);
-					if let Some(buf) = buf_opt {
-						let res = buf.save(path);
-						if let Err(err) = res {
-							println!("Saving didn't work :( {}", err);
-						}
-					} else {
-						println!("Making the buffer didn't work :(");
-					}
-				}
-			}
+			if saving { self.save_img(); }
 
 			if let Some(img) = &self.img {
 				// Add a label and the path itself on the same line
@@ -198,7 +191,28 @@ impl eframe::App for MyApp {
 }
 
 impl MyApp {
-	fn assign_img(&mut self, ctx: &egui::Context, data: ColorImage, path: &PathBuf) {
+	fn save_img(&self) {
+		if let Some(img) = &self.img && let Some(path) = rfd::FileDialog::new()
+			.set_directory(img.path.parent().map(|p| p.to_path_buf()).unwrap_or(Default::default()))
+			.set_file_name(img.path.file_name().and_then(|f| f.to_str()).unwrap_or("image.png"))
+			.save_file() {
+			let buf_opt = image::ImageBuffer::<image::Rgba<u8>, _>::from_vec(
+				img.data.width() as u32,
+				img.data.height() as u32,
+				img.data.pixels.iter().flat_map(|col| col.to_array()).collect()
+			);
+			if let Some(buf) = buf_opt {
+				let res = buf.save(path);
+				if let Err(err) = res {
+					println!("Saving didn't work :( {}", err);
+				}
+			} else {
+				println!("Making the buffer didn't work :(");
+			}
+		}
+	}
+
+	fn assign_img(&mut self, ctx: &egui::Context, data: ColorImage, path: &Path) {
 		// If we have an image already, just update it
 		if let Some(img) = &mut self.img {
 			img.path = path.to_path_buf();
@@ -207,7 +221,7 @@ impl MyApp {
 			img.handle.set(data, TEX_OPTS);
 			img.undoer = Default::default();
 		} else {
-			self.img = Some(Image{
+			self.img = Some(TextureImage{
 				path: path.to_path_buf(),
 				size: size_to_rect(data.size),
 				data: data.clone(),
@@ -258,11 +272,11 @@ impl MyApp {
 			// The drawing on drag
 			if response.dragged_by(egui::PointerButton::Primary) || response.dragged_by(egui::PointerButton::Secondary) {
 				let coords = [pos.x as usize, pos.y as usize];
-				if coords != self.last_coord {
+				if self.last_coord.is_none_or(|last| coords != last) {
 					if let Some(img) = &mut self.img && coords[0] < img.data.width() && coords[1] < img.data.height() {
-						self.last_coord = coords;
+						self.last_coord = Some(coords);
 						let primary = response.dragged_by(egui::PointerButton::Primary);
-						let color = if primary { self.color } else { self.secondary }.map(|v| (v * 255.0) as u8);
+						let color = if primary { self.color } else { self.secondary };
 						let idx = coords[0] + coords[1] * img.data.width();
 						img.data.pixels[idx] = egui::Color32::from_rgb(color[0], color[1], color[2]);
 						img.handle.set_partial(coords, img.data.region_by_pixels(coords, [1, 1]), TEX_OPTS);
@@ -273,7 +287,7 @@ impl MyApp {
 					}
 				}
 			} else {
-				self.last_coord = [usize::MAX, usize::MAX];
+				self.last_coord = None;
 				if self.save_after_release {
 					if let Some(img) = &mut self.img {
 						img.save_state();

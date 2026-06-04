@@ -14,6 +14,7 @@ Planned features:
 -[X] color picker
 -[ ] color palette
 -[X] create new image
+-[ ] toggleable pixel grid
 -[ ] usable as an "open with" program
 -[X] different colors on left and right click
 -[ ] layers
