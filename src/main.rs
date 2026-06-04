@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use eframe::egui::{self, Color32, Pos2};
-use egui::{Ui, TextureHandle, ColorImage, Rect, Widget as _, util::undoer::Undoer};
+use egui::{Ui, TextureHandle, ColorImage, Rect, Widget as _};
 use image::ImageReader;
 
 static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
@@ -43,32 +43,66 @@ fn size_to_rect(size: [usize; 2]) -> Rect {
 	Rect::from_two_pos(Pos2::ZERO, Pos2::new(size[0] as f32, size[1] as f32))
 }
 
+type PixelCoord = [usize; 2];
+
+fn pixel_from_coord(coord: PixelCoord, img: &ColorImage) -> Color32 {
+	img.pixels[coord[0] + coord[1] * img.width()]
+}
+
+fn coord_to_idx(coord: PixelCoord, img: &ColorImage) -> usize {
+	coord[0] + coord[1] * img.width()
+}
+
+struct PixelEdit {
+	oldcol: Color32,
+	coord: PixelCoord,
+}
+
+impl PixelEdit {
+	fn new(data: &ColorImage, coord: PixelCoord) -> Self {
+		PixelEdit {
+			oldcol: pixel_from_coord(coord, data),
+			coord
+		}
+	}
+}
+
 struct TextureImage {
 	path: PathBuf,
 	size: Rect,
 	data: ColorImage,
 	handle: TextureHandle,
-	undoer: Undoer<ColorImage>,
+	history: Vec<PixelEdit>,
+	redos: Vec<PixelEdit>,
 }
 
 impl TextureImage {
-	// TODO: Don't clone the entire picture twice every undo/redo??
 	fn undo(&mut self) {
-		if let Some(state) = self.undoer.undo(&self.data) {
-			self.data = state.clone();
-			self.handle.set(self.data.clone(), TEX_OPTS);
+		if let Some(edit) = self.history.pop() {
+			self.redos.push(PixelEdit::new(&self.data, edit.coord));
+			let idx = coord_to_idx(edit.coord, &self.data);
+			self.data.pixels[idx] = edit.oldcol;
+			self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
 		}
 	}
 
 	fn redo(&mut self) {
-		if let Some(state) = self.undoer.redo(&self.data) {
-			self.data = state.clone();
-			self.handle.set(self.data.clone(), TEX_OPTS);
+		if let Some(edit) = self.redos.pop() {
+			self.history.push(PixelEdit::new(&self.data, edit.coord));
+			let idx = coord_to_idx(edit.coord, &self.data);
+			self.data.pixels[idx] = edit.oldcol;
+			self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
 		}
 	}
 
-	fn save_state(&mut self) {
-		self.undoer.add_undo(&self.data);
+	fn edit(&mut self, color: Color32, coord: PixelCoord) {
+		// Just make a new redo object and immediately apply it
+		self.redos.clear();
+		self.redos.push(PixelEdit{
+			oldcol: color,
+			coord,
+		});
+		self.redo();
 	}
 }
 
@@ -78,13 +112,11 @@ struct ImageCreator {
 	height: String,
 }
 
-type Color = [u8; 3];
-
 struct MyApp {
 	creating_img: Option<ImageCreator>, // If we currently have the create new image dialog up
 	save_after_release: bool, // Whether to save the undo state after each pixel or only when you stop clicking
-	color: Color, // RGB 0-255
-	secondary: Color,
+	color: Color32, // RGB 0-255
+	secondary: Color32,
 	scene_rect: Rect,
 	img: Option<TextureImage>,
 	last_coord: Option<[usize; 2]>, // The coordinate of the last pixel we modified while dragging
@@ -95,20 +127,13 @@ impl Default for MyApp {
 		Self {
 			creating_img: None,
 			save_after_release: false,
-			color: [0, 0, 0],
-			secondary: [0, 0, 0],
+			color: Color32::WHITE,
+			secondary: Color32::BLACK,
 			scene_rect: Rect::ZERO,
 			img: Default::default(),
 			last_coord: None,
 		}
 	}
-}
-
-fn u8_color_picker(ui: &mut Ui, col: &mut Color) -> egui::Response {
-	let mut fcol = col.map(|v| (v as f32) / 255.0);
-	let res = ui.color_edit_button_rgb(&mut fcol);
-	*col = fcol.map(|v| (v * 255.0) as u8);
-	res
 }
 
 impl eframe::App for MyApp {
@@ -121,22 +146,22 @@ impl eframe::App for MyApp {
 				if ui.button("New").clicked() { self.creating_img = Some(Default::default()); }
 				opening = ui.button("Open").clicked();
 				saving = ui.add_enabled(self.img.is_some(), egui::Button::new("Save")).clicked();
-				u8_color_picker(ui, &mut self.color);
+				ui.color_edit_button_srgba(&mut self.color);
 				ui.label("/");
-				u8_color_picker(ui, &mut self.secondary);
+				ui.color_edit_button_srgba(&mut self.secondary);
 
 				if let Some(img) = &mut self.img {
-					if ui.add_enabled(img.undoer.has_undo(&img.data), egui::Button::new("Undo")).clicked() {
+					if ui.add_enabled(!img.history.is_empty(), egui::Button::new("Undo")).clicked() {
 						img.undo();
 					}
 
-					if ui.add_enabled(img.undoer.has_redo(&img.data), egui::Button::new("Redo")).clicked() {
+					if ui.add_enabled(!img.redos.is_empty(), egui::Button::new("Redo")).clicked() {
 						img.redo();
 					}
 				}
 
 				ui.checkbox(&mut self.save_after_release, "Save After Release")
-					.on_hover_text("Whether to save the undo state after each pixel or only when you stop clicking");
+					.on_hover_text("(Currently TODO) Whether to save the undo state after each pixel or only when you stop clicking");
 			});
 
 			if let Some(mut creator) = self.creating_img.take() {
@@ -219,20 +244,17 @@ impl MyApp {
 			img.size = size_to_rect(data.size);
 			img.data = data.clone();
 			img.handle.set(data, TEX_OPTS);
-			img.undoer = Default::default();
+			img.history = Default::default();
+			img.redos = Default::default();
 		} else {
 			self.img = Some(TextureImage{
 				path: path.to_path_buf(),
 				size: size_to_rect(data.size),
 				data: data.clone(),
 				handle: ctx.load_texture("screenshot_demo", data, TEX_OPTS),
-				undoer: Default::default(),
+				history: Default::default(),
+				redos: Default::default(),
 			});
-		}
-
-		// Add the initial picture state to the undoer
-		if let Some(img) = &mut self.img {
-			img.save_state();
 		}
 	}
 
@@ -277,22 +299,12 @@ impl MyApp {
 						self.last_coord = Some(coords);
 						let primary = response.dragged_by(egui::PointerButton::Primary);
 						let color = if primary { self.color } else { self.secondary };
-						let idx = coords[0] + coords[1] * img.data.width();
-						img.data.pixels[idx] = egui::Color32::from_rgb(color[0], color[1], color[2]);
-						img.handle.set_partial(coords, img.data.region_by_pixels(coords, [1, 1]), TEX_OPTS);
 
-						if !self.save_after_release {
-							img.save_state();
-						}
+						img.edit(color, coords);
 					}
 				}
 			} else {
 				self.last_coord = None;
-				if self.save_after_release {
-					if let Some(img) = &mut self.img {
-						img.save_state();
-					}
-				}
 			}
 		}
 	}
