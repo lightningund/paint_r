@@ -11,7 +11,6 @@ static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 };
 
 fn main() -> eframe::Result {
-	println!("Hello, world!");
 	let options = eframe::NativeOptions {
 		viewport: egui::ViewportBuilder::default()
 			.with_inner_size([500.0, 500.0])
@@ -156,7 +155,6 @@ impl eframe::App for MyApp {
 					.set_directory(img.path.parent().map(|p| p.to_path_buf()).unwrap_or(Default::default()))
 					.set_file_name(img.path.file_name().and_then(|f| f.to_str()).unwrap_or("image.png"))
 					.save_file() {
-					// TODO: impl Pixel for Color32 so that I don't need to do the mapping
 					let buf_opt = image::ImageBuffer::<image::Rgba<u8>, _>::from_vec(
 						img.data.width() as u32,
 						img.data.height() as u32,
@@ -216,7 +214,8 @@ impl MyApp {
 			// The position readout works on hover
 			let coords = [pos.x as i32, pos.y as i32];
 			if coords[0] >= 0 && coords[1] >= 0 {
-				ui.put(size_to_rect([350, 50]), egui::Label::new(format!("Pointer Pos: {:?}", coords)));
+				// TODO: Figure out how to actually place this next to the other info
+				ui.put(size_to_rect([750, 115]), egui::Label::new(format!("Pointer Pos: {:?}", coords)));
 			}
 
 			// The drawing on drag
