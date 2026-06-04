@@ -164,29 +164,7 @@ impl eframe::App for MyApp {
 					.on_hover_text("(Currently TODO) Whether to save the undo state after each pixel or only when you stop clicking");
 			});
 
-			if let Some(mut creator) = self.creating_img.take() {
-				let mut created = false;
-				egui::Window::new("Create New Image")
-					.order(egui::Order::Foreground)
-					.show(ui.ctx(), |ui| {
-					let wlabel = ui.label("Width:");
-					ui.text_edit_singleline(&mut creator.width).labelled_by(wlabel.id);
-					let hlabel = ui.label("Height:");
-					ui.text_edit_singleline(&mut creator.height).labelled_by(hlabel.id);
-
-					if ui.button("Create").clicked() {
-						if let Ok(w) = creator.width.parse() && let Ok(h) = creator.height.parse() {
-							self.assign_img(ui.ctx(), ColorImage::filled([w, h], Color32::WHITE), Path::new(""));
-							created = true;
-						} else {
-							println!("Please enter only numbers");
-						}
-					}
-				});
-
-				// If we didn't actually make the image this frame, put it back
-				if !created { self.creating_img = Some(creator); }
-			}
+			self.image_creator_window(ui);
 
 			// Create a button, and check if it was clicked. Then, with short circuiting,
 			// if it was clicked we create a file dialog and assign it to path based on what the user clicks
@@ -215,46 +193,36 @@ impl eframe::App for MyApp {
 	}
 }
 
+// UI Elements
 impl MyApp {
-	fn save_img(&self) {
-		if let Some(img) = &self.img && let Some(path) = rfd::FileDialog::new()
-			.set_directory(img.path.parent().map(|p| p.to_path_buf()).unwrap_or(Default::default()))
-			.set_file_name(img.path.file_name().and_then(|f| f.to_str()).unwrap_or("image.png"))
-			.save_file() {
-			let buf_opt = image::ImageBuffer::<image::Rgba<u8>, _>::from_vec(
-				img.data.width() as u32,
-				img.data.height() as u32,
-				img.data.pixels.iter().flat_map(|col| col.to_array()).collect()
-			);
-			if let Some(buf) = buf_opt {
-				let res = buf.save(path);
-				if let Err(err) = res {
-					println!("Saving didn't work :( {}", err);
-				}
-			} else {
-				println!("Making the buffer didn't work :(");
-			}
-		}
-	}
+	fn image_creator_window(&mut self, ui: &mut Ui) {
+		if let Some(mut creator) = self.creating_img.take() {
+			let mut created = false;
+			egui::Window::new("Create New Image")
+				.order(egui::Order::Foreground)
+				.collapsible(false)
+				.show(ui.ctx(), |ui| {
+				let wlabel = ui.label("Width:");
+				ui.text_edit_singleline(&mut creator.width).labelled_by(wlabel.id);
+				let hlabel = ui.label("Height:");
+				ui.text_edit_singleline(&mut creator.height).labelled_by(hlabel.id);
 
-	fn assign_img(&mut self, ctx: &egui::Context, data: ColorImage, path: &Path) {
-		// If we have an image already, just update it
-		if let Some(img) = &mut self.img {
-			img.path = path.to_path_buf();
-			img.size = size_to_rect(data.size);
-			img.data = data.clone();
-			img.handle.set(data, TEX_OPTS);
-			img.history = Default::default();
-			img.redos = Default::default();
-		} else {
-			self.img = Some(TextureImage{
-				path: path.to_path_buf(),
-				size: size_to_rect(data.size),
-				data: data.clone(),
-				handle: ctx.load_texture("screenshot_demo", data, TEX_OPTS),
-				history: Default::default(),
-				redos: Default::default(),
+				if ui.button("Create").clicked() {
+					if let Ok(w) = creator.width.parse() && let Ok(h) = creator.height.parse() {
+						self.assign_img(ui.ctx(), ColorImage::filled([w, h], Color32::WHITE), Path::new(""));
+						created = true;
+					} else {
+						println!("Please enter only numbers");
+					}
+				}
+
+				if ui.button("Cancel").clicked() {
+					created = true;
+				}
 			});
+
+			// If we didn't actually make the image this frame, put it back
+			if !created { self.creating_img = Some(creator); }
 		}
 	}
 
@@ -306,6 +274,51 @@ impl MyApp {
 			} else {
 				self.last_coord = None;
 			}
+		}
+	}
+}
+
+// Functional stuff
+impl MyApp {
+	fn save_img(&self) {
+		if let Some(img) = &self.img && let Some(path) = rfd::FileDialog::new()
+			.set_directory(img.path.parent().map(|p| p.to_path_buf()).unwrap_or(Default::default()))
+			.set_file_name(img.path.file_name().and_then(|f| f.to_str()).unwrap_or("image.png"))
+			.save_file() {
+			let buf_opt = image::ImageBuffer::<image::Rgba<u8>, _>::from_vec(
+				img.data.width() as u32,
+				img.data.height() as u32,
+				img.data.pixels.iter().flat_map(|col| col.to_array()).collect()
+			);
+			if let Some(buf) = buf_opt {
+				let res = buf.save(path);
+				if let Err(err) = res {
+					println!("Saving didn't work :( {}", err);
+				}
+			} else {
+				println!("Making the buffer didn't work :(");
+			}
+		}
+	}
+
+	fn assign_img(&mut self, ctx: &egui::Context, data: ColorImage, path: &Path) {
+		// If we have an image already, just update it
+		if let Some(img) = &mut self.img {
+			img.path = path.to_path_buf();
+			img.size = size_to_rect(data.size);
+			img.data = data.clone();
+			img.handle.set(data, TEX_OPTS);
+			img.history = Default::default();
+			img.redos = Default::default();
+		} else {
+			self.img = Some(TextureImage{
+				path: path.to_path_buf(),
+				size: size_to_rect(data.size),
+				data: data.clone(),
+				handle: ctx.load_texture("screenshot_demo", data, TEX_OPTS),
+				history: Default::default(),
+				redos: Default::default(),
+			});
 		}
 	}
 }
