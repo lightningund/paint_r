@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use eframe::egui;
+use eframe::egui::{self, Color32};
 use egui::{Ui, TextureHandle, ColorImage, Rect, Widget as _, util::undoer::Undoer};
 use image::ImageReader;
 
@@ -44,6 +44,12 @@ fn size_to_rect(size: [usize; 2]) -> Rect {
 	Rect::with_max_x(Rect::with_max_y(Rect::ZERO, size[1] as f32), size[0] as f32)
 }
 
+#[derive(Default, Debug)]
+struct ImageCreator {
+	width: String,
+	height: String,
+}
+
 struct Image {
 	path: PathBuf,
 	size: Rect,
@@ -70,6 +76,7 @@ impl Image {
 }
 
 struct MyApp {
+	creating_img: Option<ImageCreator>, // If we currently have the create new image dialog up
 	save_after_release: bool, // Whether to save the undo state after each pixel or only when you stop clicking
 	color: [f32; 3], // RGB 0-1
 	secondary: [f32; 3],
@@ -81,12 +88,13 @@ struct MyApp {
 impl Default for MyApp {
 	fn default() -> Self {
 		Self {
+			creating_img: None,
 			save_after_release: false,
-    		color: [0.0, 0.0, 0.0],
-    		secondary: [0.0, 0.0, 0.0],
+			color: [0.0, 0.0, 0.0],
+			secondary: [0.0, 0.0, 0.0],
 			scene_rect: Rect::ZERO,
 			img: Default::default(),
-    		last_coord: [usize::MAX, usize::MAX],
+			last_coord: [usize::MAX, usize::MAX],
 		}
 	}
 }
@@ -98,6 +106,7 @@ impl eframe::App for MyApp {
 			let mut opening = false;
 			let mut saving = false;
 			ui.horizontal(|ui| {
+				if ui.button("New").clicked() { self.creating_img = Some(Default::default()); }
 				opening = ui.button("Open").clicked();
 				saving = ui.add_enabled(self.img.is_some(), egui::Button::new("Save")).clicked();
 				ui.color_edit_button_rgb(&mut self.color);
@@ -118,32 +127,36 @@ impl eframe::App for MyApp {
 					.on_hover_text("Whether to save the undo state after each pixel or only when you stop clicking");
 			});
 
+			if let Some(mut creator) = self.creating_img.take() {
+				let mut created = false;
+				egui::Window::new("Create New Image")
+					.order(egui::Order::Foreground)
+					.show(ui.ctx(), |ui| {
+					let wlabel = ui.label("Width:");
+					ui.text_edit_singleline(&mut creator.width).labelled_by(wlabel.id);
+					let hlabel = ui.label("Height:");
+					ui.text_edit_singleline(&mut creator.height).labelled_by(hlabel.id);
+
+					if ui.button("Create").clicked() {
+						if let Ok(w) = creator.width.parse() && let Ok(h) = creator.height.parse() {
+							self.assign_img(ui.ctx(), ColorImage::filled([w, h], Color32::WHITE), &Default::default());
+							created = true;
+						} else {
+							println!("Please enter only numbers");
+						}
+					}
+				});
+
+				// If we didn't actually make the image this frame, put it back
+				if !created { self.creating_img = Some(creator); }
+			}
+
 			// Create a button, and check if it was clicked. Then, with short circuiting,
 			// if it was clicked we create a file dialog and assign it to path based on what the user clicks
 			// This also won't execute inside the block if the user cancels and there is no path
 			if opening && let Some(path) = rfd::FileDialog::new().pick_file() {
 				if let Ok(image_data) = load_image_from_path(&path) {
-					// If we have an image already, just update it
-					if let Some(img) = &mut self.img {
-						img.path = path;
-						img.size = size_to_rect(image_data.size);
-						img.data = image_data.clone();
-						img.handle.set(image_data, TEX_OPTS);
-						img.undoer = Default::default();
-					} else {
-						self.img = Some(Image{
-							path,
-							size: size_to_rect(image_data.size),
-							data: image_data.clone(),
-							handle: ui.ctx().load_texture("screenshot_demo", image_data, TEX_OPTS),
-							undoer: Default::default(),
-						});
-					}
-
-					// Add the initial picture state to the undoer
-					if let Some(img) = &mut self.img {
-						img.save_state();
-					}
+					self.assign_img(ui.ctx(), image_data, &path);
 
 					// force a zoom reset
 					self.scene_rect = Rect::NAN;
@@ -185,6 +198,30 @@ impl eframe::App for MyApp {
 }
 
 impl MyApp {
+	fn assign_img(&mut self, ctx: &egui::Context, data: ColorImage, path: &PathBuf) {
+		// If we have an image already, just update it
+		if let Some(img) = &mut self.img {
+			img.path = path.to_path_buf();
+			img.size = size_to_rect(data.size);
+			img.data = data.clone();
+			img.handle.set(data, TEX_OPTS);
+			img.undoer = Default::default();
+		} else {
+			self.img = Some(Image{
+				path: path.to_path_buf(),
+				size: size_to_rect(data.size),
+				data: data.clone(),
+				handle: ctx.load_texture("screenshot_demo", data, TEX_OPTS),
+				undoer: Default::default(),
+			});
+		}
+
+		// Add the initial picture state to the undoer
+		if let Some(img) = &mut self.img {
+			img.save_state();
+		}
+	}
+
 	fn scene_surface(&mut self, ui: &mut Ui) {
 		ui.label(format!("Scene rect: {:#?}", self.scene_rect));
 		ui.separator();

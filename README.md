@@ -13,7 +13,7 @@ Planned features:
 -[X] dragging to draw
 -[X] color picker
 -[ ] color palette
--[ ] create new image
+-[X] create new image
 -[ ] usable as an "open with" program
 -[X] different colors on left and right click
 -[ ] layers
