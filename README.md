@@ -22,6 +22,7 @@ Planned features:
 -[ ] layer renaming
 -[ ] layer blend modes
 -[ ] layer opacity
+-[ ] adding images over the current canvas
 -[ ] selecting
 -[ ] expanding selection
 -[ ] subtracting selection
@@ -32,4 +33,4 @@ Planned features:
 -[ ] rotating
 -[ ] canvas resize
 -[ ] canvas expand/shrink
--[ ] undo/redo
+-[X] undo/redo

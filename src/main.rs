@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use eframe::egui;
-use egui::{Ui, TextureHandle, ColorImage, Rect, Widget as _};
+use egui::{Ui, TextureHandle, ColorImage, Rect, Widget as _, util::undoer::Undoer};
 use image::ImageReader;
 
 static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
@@ -50,9 +50,28 @@ struct Image {
 	size: Rect,
 	data: ColorImage,
 	handle: TextureHandle,
+	undoer: Undoer<ColorImage>,
+}
+
+impl Image {
+	// TODO: Don't clone the entire picture twice every undo/redo??
+	fn undo(&mut self) {
+		self.undoer.undo(&self.data).and_then(|state| Some(self.data = state.clone()));
+		self.handle.set(self.data.clone(), TEX_OPTS);
+	}
+
+	fn redo(&mut self) {
+		self.undoer.redo(&self.data).and_then(|state| Some(self.data = state.clone()));
+		self.handle.set(self.data.clone(), TEX_OPTS);
+	}
+
+	fn save_state(&mut self) {
+		self.undoer.add_undo(&self.data);
+	}
 }
 
 struct MyApp {
+	save_after_release: bool, // Whether to save the undo state after each pixel or only when you stop clicking
 	color: [f32; 3], // RGB 0-1
 	secondary: [f32; 3],
 	scene_rect: Rect,
@@ -63,6 +82,7 @@ struct MyApp {
 impl Default for MyApp {
 	fn default() -> Self {
 		Self {
+			save_after_release: false,
     		color: [0.0, 0.0, 0.0],
     		secondary: [0.0, 0.0, 0.0],
 			scene_rect: Rect::ZERO,
@@ -84,6 +104,19 @@ impl eframe::App for MyApp {
 				ui.color_edit_button_rgb(&mut self.color);
 				ui.label("/");
 				ui.color_edit_button_rgb(&mut self.secondary);
+
+				if let Some(img) = &mut self.img {
+					if ui.add_enabled(img.undoer.has_undo(&img.data), egui::Button::new("Undo")).clicked() {
+						img.undo();
+					}
+
+					if ui.add_enabled(img.undoer.has_redo(&img.data), egui::Button::new("Redo")).clicked() {
+						img.redo();
+					}
+				}
+
+				ui.checkbox(&mut self.save_after_release, "Save After Release")
+					.on_hover_text("Whether to save the undo state after each pixel or only when you stop clicking");
 			});
 
 			// Create a button, and check if it was clicked. Then, with short circuiting,
@@ -97,13 +130,20 @@ impl eframe::App for MyApp {
 						img.size = size_to_rect(image_data.size);
 						img.data = image_data.clone();
 						img.handle.set(image_data, TEX_OPTS);
+						img.undoer = Default::default();
 					} else {
 						self.img = Some(Image{
 							path,
 							size: size_to_rect(image_data.size),
 							data: image_data.clone(),
 							handle: ui.ctx().load_texture("screenshot_demo", image_data, TEX_OPTS),
+							undoer: Default::default(),
 						});
+					}
+
+					// Add the initial picture state to the undoer
+					if let Some(img) = &mut self.img {
+						img.save_state();
 					}
 
 					// force a zoom reset
@@ -184,17 +224,25 @@ impl MyApp {
 				let coords = [pos.x as usize, pos.y as usize];
 				if coords != self.last_coord {
 					if let Some(img) = &mut self.img && coords[0] < img.data.width() && coords[1] < img.data.height() {
-						println!("Clicked: {:?}", coords);
 						self.last_coord = coords;
 						let primary = response.dragged_by(egui::PointerButton::Primary);
 						let color = if primary { self.color } else { self.secondary }.map(|v| (v * 255.0) as u8);
 						let idx = coords[0] + coords[1] * img.data.width();
 						img.data.pixels[idx] = egui::Color32::from_rgb(color[0], color[1], color[2]);
 						img.handle.set_partial(coords, img.data.region_by_pixels(coords, [1, 1]), TEX_OPTS);
+
+						if !self.save_after_release {
+							img.save_state();
+						}
 					}
 				}
 			} else {
 				self.last_coord = [usize::MAX, usize::MAX];
+				if self.save_after_release {
+					if let Some(img) = &mut self.img {
+						img.save_state();
+					}
+				}
 			}
 		}
 	}
