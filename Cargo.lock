@@ -2689,7 +2689,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "painter"
+name = "paintr"
 version = "0.1.0"
 dependencies = [
  "eframe",

@@ -11,6 +11,8 @@ static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 };
 
 fn main() -> eframe::Result {
+	let args: Vec<String> = std::env::args().collect();
+
 	let options = eframe::NativeOptions {
 		viewport: egui::ViewportBuilder::default()
 			.with_inner_size([500.0, 500.0])
@@ -22,7 +24,16 @@ fn main() -> eframe::Result {
 		options,
 		Box::new(|cc| {
 			egui_extras::install_image_loaders(&cc.egui_ctx);
-			Ok(Box::<MyApp>::default())
+			let mut app = MyApp::default();
+			if args.len() > 1 {
+				let path = Path::new(&args[1]);
+				let loaded = load_image_from_path(&path);
+				match loaded {
+					Ok(data) => app.assign_img(&cc.egui_ctx, data, &path),
+					Err(err) => println!("Loading Failed: {}", err),
+				}
+			}
+			Ok(Box::new(app))
 		}),
 	)
 }
@@ -340,6 +351,9 @@ impl MyApp {
 			.drag_pan_buttons(egui::DragPanButtons::MIDDLE)
 			.zoom_range(0.0..=f32::INFINITY);
 
+		let res = egui::Label::new("").layout_in_ui(ui);
+		let cursor_readout = ui.label("").rect;
+
 		let mut inner_rect = Rect::NAN;
 		let response = scene
 			.show(ui, &mut self.scene_rect, |ui| {
@@ -358,7 +372,12 @@ impl MyApp {
 			let coords = [pos.x as i32, pos.y as i32];
 			if coords[0] >= 0 && coords[1] >= 0 {
 				// TODO: Figure out how to actually place this next to the other info
-				ui.put(size_to_rect([750, 115]), egui::Label::new(format!("Pointer Pos: {:?}", coords)));
+				ui.place(
+					cursor_readout.with_max_x(1000.0),
+					egui::Label::new(format!("Pointer Pos: {:?}", coords))
+						.halign(egui::Align::LEFT)
+						.extend()
+				);
 			}
 
 			// The drawing on drag
