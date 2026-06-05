@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use eframe::egui::{self, Color32, Pos2};
 use egui::{Ui, TextureHandle, ColorImage, Rect, Widget as _};
-use image::ImageReader;
+use image::{ImageReader};
 
 static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 	magnification: egui::TextureFilter::Nearest,
@@ -9,6 +9,17 @@ static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 	mipmap_mode: None,
 	wrap_mode: egui::TextureWrapMode::ClampToEdge,
 };
+
+fn test_bresenham() {
+	println!("to {:?}: {:?}", [6, 3], bresenham_full(6, 3));
+	println!("to {:?}: {:?}", [3, 6], bresenham_full(3, 6));
+	println!("to {:?}: {:?}", [6, -3], bresenham_full(6, -3));
+	println!("to {:?}: {:?}", [-3, 6], bresenham_full(-3, 6));
+	println!("to {:?}: {:?}", [3, -6], bresenham_full(3, -6));
+	println!("to {:?}: {:?}", [-6, 3], bresenham_full(-6, 3));
+	println!("to {:?}: {:?}", [-6, -3], bresenham_full(-6, -3));
+	println!("to {:?}: {:?}", [-3, -6], bresenham_full(-3, -6));
+}
 
 fn main() -> eframe::Result {
 	let options = eframe::NativeOptions {
@@ -166,6 +177,24 @@ impl eframe::App for MyApp {
 
 			self.image_creator_window(ui);
 
+			// Bresenham line test
+			if ui.button("Test").clicked() {
+				self.assign_img(ui.ctx(), ColorImage::filled([1000, 1000], Color32::WHITE), Path::new(""));
+				let mut quad_test = |dx: bool, dy: bool| {
+					let a = if dx { 500 + 462 } else { 500 - 462 };
+					let b = if dy { 500 + 191 } else { 500 - 191 };
+					self.last_coord = Some([500, 500]);
+					self.draw([a, b], false);
+					self.last_coord = Some([500, 500]);
+					self.draw([b, a], false);
+				};
+
+				quad_test(true, true);
+				quad_test(true, false);
+				quad_test(false, true);
+				quad_test(false, false);
+			}
+
 			// Create a button, and check if it was clicked. Then, with short circuiting,
 			// if it was clicked we create a file dialog and assign it to path based on what the user clicks
 			// This also won't execute inside the block if the user cancels and there is no path
@@ -191,6 +220,72 @@ impl eframe::App for MyApp {
 			self.scene_surface(ui);
 		});
 	}
+}
+
+// From Wikipedia
+// only works going down-right and when dx > dy
+fn bresenham_oct(dx: i32, dy: i32) -> Vec<[i32; 2]> {
+	let mut points: Vec<[i32; 2]> = vec![];
+
+	let mut d = 2*dy - dx;
+	let mut y = 0;
+
+	for x in 0..=dx {
+		points.push([x, y]);
+		if d > 0 {
+			y += 1;
+			d += 2 * (dy - dx);
+		} else {
+			d += 2 * dy;
+		}
+	}
+
+	points
+}
+
+// Works going down-right
+fn bresenham_quad(dx: i32, dy: i32) -> Vec<[i32; 2]> {
+	if dx < dy {
+		let points = bresenham_oct(dy, dx);
+		return points.iter().map(|point| [point[1], point[0]]).collect();
+	} else {
+		let points = bresenham_oct(dx, dy);
+		return points;
+	}
+}
+
+// Works going down
+fn bresenham_half(dx: i32, dy: i32) -> Vec<[i32; 2]> {
+	let flipped = dx < 0;
+	let points = bresenham_quad(dx.abs(), dy);
+	if flipped {
+		return points.iter().map(|point| [-point[0], point[1]]).collect();
+	} else {
+		return points;
+	}
+}
+
+// Works in all directions
+fn bresenham_full(dx: i32, dy: i32) -> Vec<[i32; 2]> {
+	let flipped = dy < 0;
+	let points = bresenham_half(dx, dy.abs());
+	if flipped {
+		return points.iter().map(|point| [point[0], -point[1]]).collect();
+	} else {
+		return points;
+	}
+}
+
+fn bresenham(start: PixelCoord, end: PixelCoord) -> Vec<PixelCoord> {
+	let x0 = start[0] as i32;
+	let y0 = start[1] as i32;
+	let x1 = end[0] as i32;
+	let y1 = end[1] as i32;
+
+	let dx = x1 - x0;
+	let dy = y1 - y0;
+
+	bresenham_full(dx, dy).iter().map(|point| [(point[0] + x0) as usize, (point[1] + y0) as usize]).collect()
 }
 
 // UI Elements
@@ -251,7 +346,7 @@ impl MyApp {
 			self.scene_rect = inner_rect;
 		}
 
-		if let Some(pos) = response.hover_pos() {
+		if response.contains_pointer() && let Some(pos) = response.hover_pos() {
 			// The position readout works on hover
 			let coords = [pos.x as i32, pos.y as i32];
 			if coords[0] >= 0 && coords[1] >= 0 {
@@ -262,15 +357,7 @@ impl MyApp {
 			// The drawing on drag
 			if response.dragged_by(egui::PointerButton::Primary) || response.dragged_by(egui::PointerButton::Secondary) {
 				let coords = [pos.x as usize, pos.y as usize];
-				if self.last_coord.is_none_or(|last| coords != last) {
-					if let Some(img) = &mut self.img && coords[0] < img.data.width() && coords[1] < img.data.height() {
-						self.last_coord = Some(coords);
-						let primary = response.dragged_by(egui::PointerButton::Primary);
-						let color = if primary { self.color } else { self.secondary };
-
-						img.edit(color, coords);
-					}
-				}
+				self.draw(coords, response.dragged_by(egui::PointerButton::Primary));
 			} else {
 				self.last_coord = None;
 			}
@@ -280,6 +367,27 @@ impl MyApp {
 
 // Functional stuff
 impl MyApp {
+	fn draw(&mut self, coords: PixelCoord, primary: bool) {
+		if self.last_coord.is_none_or(|last| coords != last) {
+			if let Some(img) = &mut self.img && coords[0] < img.data.width() && coords[1] < img.data.height() {
+				let color = if primary { self.color } else { self.secondary };
+
+				if let Some(last) = self.last_coord {
+					let points = bresenham(last, coords);
+
+					for point in points {
+						img.edit(color, point);
+					}
+				} else {
+					img.edit(color, coords);
+				}
+
+				self.last_coord = Some(coords);
+
+			}
+		}
+	}
+
 	fn save_img(&self) {
 		if let Some(img) = &self.img && let Some(path) = rfd::FileDialog::new()
 			.set_directory(img.path.parent().map(|p| p.to_path_buf()).unwrap_or(Default::default()))
