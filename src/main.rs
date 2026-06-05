@@ -45,6 +45,63 @@ fn size_to_rect(size: [usize; 2]) -> Rect {
 
 type PixelCoord = [usize; 2];
 
+// From Wikipedia
+// Works going down-right and when dx > dy
+fn bresenham_oct(dx: i32, dy: i32) -> Vec<[i32; 2]> {
+	let mut points: Vec<[i32; 2]> = vec![];
+
+	let mut d = 2*dy - dx;
+	let mut y = 0;
+
+	for x in 0..=dx {
+		points.push([x, y]);
+		if d > 0 {
+			y += 1;
+			d += 2 * (dy - dx);
+		} else {
+			d += 2 * dy;
+		}
+	}
+
+	points
+}
+
+// Works going down-right
+fn bresenham_quad(dx: i32, dy: i32) -> Vec<[i32; 2]> {
+	if dx < dy {
+		let points = bresenham_oct(dy, dx);
+		return points.iter().map(|point| [point[1], point[0]]).collect();
+	} else {
+		let points = bresenham_oct(dx, dy);
+		return points;
+	}
+}
+
+// Works in all directions
+fn bresenham_full(dx: i32, dy: i32) -> Vec<[i32; 2]> {
+	let flipped_x = dx < 0;
+	let flipped_y = dy < 0;
+	return bresenham_quad(dx.abs(), dy.abs()).iter().map(|point| [
+		if flipped_x { -point[0] } else { point[0] },
+		if flipped_y { -point[1] } else { point[1] }
+	]).collect();
+}
+
+fn bresenham(start: PixelCoord, end: PixelCoord) -> Vec<PixelCoord> {
+	let x0 = start[0] as i32;
+	let y0 = start[1] as i32;
+	let x1 = end[0] as i32;
+	let y1 = end[1] as i32;
+
+	let dx = x1 - x0;
+	let dy = y1 - y0;
+
+	bresenham_full(dx, dy).iter()
+		.skip(1) // skip the first one since it's the one from last frame
+		.map(|point| [(point[0] + x0) as usize, (point[1] + y0) as usize])
+		.collect()
+}
+
 fn pixel_from_coord(coord: PixelCoord, img: &ColorImage) -> Color32 {
 	img.pixels[coord[0] + coord[1] * img.width()]
 }
@@ -116,7 +173,7 @@ impl TextureImage {
 	fn mini_redo(&mut self, edit: PixelEdit) {
 		if self.history.is_empty() { self.history.push(vec![]); }
 		let top = self.history.last_mut().unwrap(); // we can unwrap here since we know there's at least one
-		top.push(PixelEdit::new(&self.data, edit.coord));
+		top.push(PixelEdit::new(&self.data, edit.coord)); // add this edit to the current ongoing "Undo" edit
 		let idx = coord_to_idx(edit.coord, &self.data);
 		self.data.pixels[idx] = edit.oldcol;
 		self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
@@ -133,6 +190,8 @@ impl TextureImage {
 	}
 
 	fn edit(&mut self, color: Color32, coord: PixelCoord) {
+		if coord[0] >= self.data.width() || coord[1] >= self.data.height() { return; }
+
 		if self.saved {
 			self.saved = false;
 			self.history.push(vec![]);
@@ -164,7 +223,7 @@ struct MyApp {
 	secondary: Color32,
 	scene_rect: Rect,
 	img: Option<TextureImage>,
-	last_coord: Option<[usize; 2]>, // The coordinate of the last pixel we modified while dragging
+	last_coord: Option<PixelCoord>, // The coordinate of the last pixel we modified while dragging
 }
 
 impl Default for MyApp {
@@ -206,7 +265,7 @@ impl eframe::App for MyApp {
 				}
 
 				ui.checkbox(&mut self.save_after_release, "Save After Release")
-					.on_hover_text("(Currently TODO) Whether to save the undo state after each pixel or only when you stop clicking");
+					.on_hover_text("Whether to save the undo state after each pixel or only when you stop clicking");
 			});
 
 			self.image_creator_window(ui);
@@ -229,88 +288,17 @@ impl eframe::App for MyApp {
 				quad_test(false, false);
 			}
 
-			// Create a button, and check if it was clicked. Then, with short circuiting,
-			// if it was clicked we create a file dialog and assign it to path based on what the user clicks
-			// This also won't execute inside the block if the user cancels and there is no path
 			if opening && let Some(path) = rfd::FileDialog::new().pick_file() {
 				if let Ok(image_data) = load_image_from_path(&path) {
 					self.assign_img(ui.ctx(), image_data, &path);
-
-					// force a zoom reset
-					self.scene_rect = Rect::NAN;
 				}
 			}
 
 			if saving { self.save_img(); }
 
-			if let Some(img) = &self.img {
-				// Add a label and the path itself on the same line
-				ui.horizontal(|ui| {
-					ui.label("Picked File:");
-					ui.monospace(img.path.display().to_string());
-				});
-			}
-
 			self.scene_surface(ui);
 		});
 	}
-}
-
-// From Wikipedia
-// Works going down-right and when dx > dy
-fn bresenham_oct(dx: i32, dy: i32) -> Vec<[i32; 2]> {
-	let mut points: Vec<[i32; 2]> = vec![];
-
-	let mut d = 2*dy - dx;
-	let mut y = 0;
-
-	for x in 0..=dx {
-		points.push([x, y]);
-		if d > 0 {
-			y += 1;
-			d += 2 * (dy - dx);
-		} else {
-			d += 2 * dy;
-		}
-	}
-
-	points
-}
-
-// Works going down-right
-fn bresenham_quad(dx: i32, dy: i32) -> Vec<[i32; 2]> {
-	if dx < dy {
-		let points = bresenham_oct(dy, dx);
-		return points.iter().map(|point| [point[1], point[0]]).collect();
-	} else {
-		let points = bresenham_oct(dx, dy);
-		return points;
-	}
-}
-
-// Works in all directions
-fn bresenham_full(dx: i32, dy: i32) -> Vec<[i32; 2]> {
-	let flipped_x = dx < 0;
-	let flipped_y = dy < 0;
-	return bresenham_quad(dx.abs(), dy.abs()).iter().map(|point| [
-		if flipped_x { -point[0] } else { point[0] },
-		if flipped_y { -point[1] } else { point[1] }
-	]).collect();
-}
-
-fn bresenham(start: PixelCoord, end: PixelCoord) -> Vec<PixelCoord> {
-	let x0 = start[0] as i32;
-	let y0 = start[1] as i32;
-	let x1 = end[0] as i32;
-	let y1 = end[1] as i32;
-
-	let dx = x1 - x0;
-	let dy = y1 - y0;
-
-	bresenham_full(dx, dy).iter()
-		.skip(1) // skip the first one since it's the one from last frame
-		.map(|point| [(point[0] + x0) as usize, (point[1] + y0) as usize])
-		.collect()
 }
 
 // UI Elements
@@ -347,9 +335,6 @@ impl MyApp {
 	}
 
 	fn scene_surface(&mut self, ui: &mut Ui) {
-		ui.label(format!("Scene rect: {:#?}", self.scene_rect));
-		ui.separator();
-
 		let scene = egui::Scene::new()
 			.sense(egui::Sense::DRAG)
 			.drag_pan_buttons(egui::DragPanButtons::MIDDLE)
@@ -358,10 +343,7 @@ impl MyApp {
 		let mut inner_rect = Rect::NAN;
 		let response = scene
 			.show(ui, &mut self.scene_rect, |ui| {
-				if let Some(img) = &self.img {
-					egui::Image::new(&img.handle).ui(ui);
-				}
-
+				if let Some(img) = &self.img { egui::Image::new(&img.handle).ui(ui); }
 				inner_rect = ui.min_rect();
 			})
 			.response;
@@ -398,7 +380,7 @@ impl MyApp {
 impl MyApp {
 	fn draw(&mut self, coords: PixelCoord, primary: bool) {
 		if self.last_coord.is_none_or(|last| coords != last) {
-			if let Some(img) = &mut self.img && coords[0] < img.data.width() && coords[1] < img.data.height() {
+			if let Some(img) = &mut self.img {
 				let color = if primary { self.color } else { self.secondary };
 
 				if let Some(last) = self.last_coord {
@@ -448,6 +430,9 @@ impl MyApp {
 		} else {
 			self.img = Some(TextureImage::new(path, data, ctx));
 		}
+
+		// force a zoom reset
+		self.scene_rect = Rect::NAN;
 	}
 }
 
