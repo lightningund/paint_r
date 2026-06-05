@@ -10,17 +10,6 @@ static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 	wrap_mode: egui::TextureWrapMode::ClampToEdge,
 };
 
-fn test_bresenham() {
-	println!("to {:?}: {:?}", [6, 3], bresenham_full(6, 3));
-	println!("to {:?}: {:?}", [3, 6], bresenham_full(3, 6));
-	println!("to {:?}: {:?}", [6, -3], bresenham_full(6, -3));
-	println!("to {:?}: {:?}", [-3, 6], bresenham_full(-3, 6));
-	println!("to {:?}: {:?}", [3, -6], bresenham_full(3, -6));
-	println!("to {:?}: {:?}", [-6, 3], bresenham_full(-6, 3));
-	println!("to {:?}: {:?}", [-6, -3], bresenham_full(-6, -3));
-	println!("to {:?}: {:?}", [-3, -6], bresenham_full(-3, -6));
-}
-
 fn main() -> eframe::Result {
 	let options = eframe::NativeOptions {
 		viewport: egui::ViewportBuilder::default()
@@ -178,7 +167,7 @@ impl eframe::App for MyApp {
 			self.image_creator_window(ui);
 
 			// Bresenham line test
-			if ui.button("Test").clicked() {
+			if ui.button("Test Lines").clicked() {
 				self.assign_img(ui.ctx(), ColorImage::filled([1000, 1000], Color32::WHITE), Path::new(""));
 				let mut quad_test = |dx: bool, dy: bool| {
 					let a = if dx { 500 + 462 } else { 500 - 462 };
@@ -223,7 +212,7 @@ impl eframe::App for MyApp {
 }
 
 // From Wikipedia
-// only works going down-right and when dx > dy
+// Works going down-right and when dx > dy
 fn bresenham_oct(dx: i32, dy: i32) -> Vec<[i32; 2]> {
 	let mut points: Vec<[i32; 2]> = vec![];
 
@@ -254,26 +243,14 @@ fn bresenham_quad(dx: i32, dy: i32) -> Vec<[i32; 2]> {
 	}
 }
 
-// Works going down
-fn bresenham_half(dx: i32, dy: i32) -> Vec<[i32; 2]> {
-	let flipped = dx < 0;
-	let points = bresenham_quad(dx.abs(), dy);
-	if flipped {
-		return points.iter().map(|point| [-point[0], point[1]]).collect();
-	} else {
-		return points;
-	}
-}
-
 // Works in all directions
 fn bresenham_full(dx: i32, dy: i32) -> Vec<[i32; 2]> {
-	let flipped = dy < 0;
-	let points = bresenham_half(dx, dy.abs());
-	if flipped {
-		return points.iter().map(|point| [point[0], -point[1]]).collect();
-	} else {
-		return points;
-	}
+	let flipped_x = dx < 0;
+	let flipped_y = dy < 0;
+	return bresenham_quad(dx.abs(), dy.abs()).iter().map(|point| [
+		if flipped_x { -point[0] } else { point[0] },
+		if flipped_y { -point[1] } else { point[1] }
+	]).collect();
 }
 
 fn bresenham(start: PixelCoord, end: PixelCoord) -> Vec<PixelCoord> {
@@ -428,5 +405,22 @@ impl MyApp {
 				redos: Default::default(),
 			});
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_bresenham() {
+		println!("to {:?}: {:?}", [6, 3], bresenham_full(6, 3));
+		println!("to {:?}: {:?}", [3, 6], bresenham_full(3, 6));
+		println!("to {:?}: {:?}", [6, -3], bresenham_full(6, -3));
+		println!("to {:?}: {:?}", [-3, 6], bresenham_full(-3, 6));
+		println!("to {:?}: {:?}", [3, -6], bresenham_full(3, -6));
+		println!("to {:?}: {:?}", [-6, 3], bresenham_full(-6, 3));
+		println!("to {:?}: {:?}", [-6, -3], bresenham_full(-6, -3));
+		println!("to {:?}: {:?}", [-3, -6], bresenham_full(-3, -6));
 	}
 }
