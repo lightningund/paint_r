@@ -78,13 +78,26 @@ struct TextureImage {
 }
 
 impl TextureImage {
-	fn mini_redo(&mut self, edit: PixelEdit) {
-		if self.history.is_empty() { self.history.push(vec![]); }
-		let top = self.history.last_mut().unwrap(); // we can unwrap here since we know there's at least one
-		top.push(PixelEdit::new(&self.data, edit.coord));
-		let idx = coord_to_idx(edit.coord, &self.data);
-		self.data.pixels[idx] = edit.oldcol;
-		self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
+	fn new(path: &Path, data: ColorImage, ctx: &egui::Context) -> Self {
+		TextureImage{
+			saved: false,
+			path: path.to_path_buf(),
+			size: size_to_rect(data.size),
+			data: data.clone(),
+			handle: ctx.load_texture("texture", data, TEX_OPTS),
+			history: Default::default(),
+			redos: Default::default(),
+		}
+	}
+
+	fn assign(&mut self, path: &Path, data: ColorImage) {
+		self.saved = false;
+		self.path = path.to_path_buf();
+		self.size = size_to_rect(data.size);
+		self.data = data.clone();
+		self.handle.set(data, TEX_OPTS);
+		self.history = Default::default();
+		self.redos = Default::default();
 	}
 
 	fn undo(&mut self) {
@@ -98,6 +111,15 @@ impl TextureImage {
 			}
 			self.redos.push(redo);
 		}
+	}
+
+	fn mini_redo(&mut self, edit: PixelEdit) {
+		if self.history.is_empty() { self.history.push(vec![]); }
+		let top = self.history.last_mut().unwrap(); // we can unwrap here since we know there's at least one
+		top.push(PixelEdit::new(&self.data, edit.coord));
+		let idx = coord_to_idx(edit.coord, &self.data);
+		self.data.pixels[idx] = edit.oldcol;
+		self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
 	}
 
 	fn redo(&mut self) {
@@ -422,22 +444,9 @@ impl MyApp {
 	fn assign_img(&mut self, ctx: &egui::Context, data: ColorImage, path: &Path) {
 		// If we have an image already, just update it
 		if let Some(img) = &mut self.img {
-			img.path = path.to_path_buf();
-			img.size = size_to_rect(data.size);
-			img.data = data.clone();
-			img.handle.set(data, TEX_OPTS);
-			img.history = Default::default();
-			img.redos = Default::default();
+			img.assign(path, data);
 		} else {
-			self.img = Some(TextureImage{
-				saved: false,
-				path: path.to_path_buf(),
-				size: size_to_rect(data.size),
-				data: data.clone(),
-				handle: ctx.load_texture("screenshot_demo", data, TEX_OPTS),
-				history: Default::default(),
-				redos: Default::default(),
-			});
+			self.img = Some(TextureImage::new(path, data, ctx));
 		}
 	}
 }
