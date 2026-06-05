@@ -68,41 +68,64 @@ impl PixelEdit {
 }
 
 struct TextureImage {
+	saved: bool,
 	path: PathBuf,
 	size: Rect,
 	data: ColorImage,
 	handle: TextureHandle,
-	history: Vec<PixelEdit>,
-	redos: Vec<PixelEdit>,
+	history: Vec<Vec<PixelEdit>>,
+	redos: Vec<Vec<PixelEdit>>,
 }
 
 impl TextureImage {
+	fn mini_redo(&mut self, edit: PixelEdit) {
+		if self.history.is_empty() { self.history.push(vec![]); }
+		let top = self.history.last_mut().unwrap(); // we can unwrap here since we know there's at least one
+		top.push(PixelEdit::new(&self.data, edit.coord));
+		let idx = coord_to_idx(edit.coord, &self.data);
+		self.data.pixels[idx] = edit.oldcol;
+		self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
+	}
+
 	fn undo(&mut self) {
-		if let Some(edit) = self.history.pop() {
-			self.redos.push(PixelEdit::new(&self.data, edit.coord));
-			let idx = coord_to_idx(edit.coord, &self.data);
-			self.data.pixels[idx] = edit.oldcol;
-			self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
+		if let Some(edits) = self.history.pop() {
+			let mut redo: Vec<PixelEdit> = vec![];
+			for edit in edits.iter().rev() {
+				redo.push(PixelEdit::new(&self.data, edit.coord));
+				let idx = coord_to_idx(edit.coord, &self.data);
+				self.data.pixels[idx] = edit.oldcol;
+				self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
+			}
+			self.redos.push(redo);
 		}
 	}
 
 	fn redo(&mut self) {
-		if let Some(edit) = self.redos.pop() {
-			self.history.push(PixelEdit::new(&self.data, edit.coord));
-			let idx = coord_to_idx(edit.coord, &self.data);
-			self.data.pixels[idx] = edit.oldcol;
-			self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
+		if let Some(edits) = self.redos.pop() {
+			for edit in edits {
+				self.mini_redo(edit);
+			}
+
+			self.save_state();
 		}
 	}
 
 	fn edit(&mut self, color: Color32, coord: PixelCoord) {
+		if self.saved {
+			self.saved = false;
+			self.history.push(vec![]);
+		}
+
 		// Just make a new redo object and immediately apply it
 		self.redos.clear();
-		self.redos.push(PixelEdit{
+		self.mini_redo(PixelEdit{
 			oldcol: color,
 			coord,
 		});
-		self.redo();
+	}
+
+	fn save_state(&mut self) {
+		self.saved = true;
 	}
 }
 
@@ -262,7 +285,10 @@ fn bresenham(start: PixelCoord, end: PixelCoord) -> Vec<PixelCoord> {
 	let dx = x1 - x0;
 	let dy = y1 - y0;
 
-	bresenham_full(dx, dy).iter().map(|point| [(point[0] + x0) as usize, (point[1] + y0) as usize]).collect()
+	bresenham_full(dx, dy).iter()
+		.skip(1) // skip the first one since it's the one from last frame
+		.map(|point| [(point[0] + x0) as usize, (point[1] + y0) as usize])
+		.collect()
 }
 
 // UI Elements
@@ -337,6 +363,10 @@ impl MyApp {
 				self.draw(coords, response.dragged_by(egui::PointerButton::Primary));
 			} else {
 				self.last_coord = None;
+
+				if self.save_after_release && let Some(img) = &mut self.img {
+					img.save_state();
+				}
 			}
 		}
 	}
@@ -350,17 +380,20 @@ impl MyApp {
 				let color = if primary { self.color } else { self.secondary };
 
 				if let Some(last) = self.last_coord {
-					let points = bresenham(last, coords);
-
-					for point in points {
+					for point in bresenham(last, coords) {
 						img.edit(color, point);
+						if !self.save_after_release {
+							img.save_state();
+						}
 					}
 				} else {
 					img.edit(color, coords);
+					if !self.save_after_release {
+						img.save_state();
+					}
 				}
 
 				self.last_coord = Some(coords);
-
 			}
 		}
 	}
@@ -397,6 +430,7 @@ impl MyApp {
 			img.redos = Default::default();
 		} else {
 			self.img = Some(TextureImage{
+				saved: false,
 				path: path.to_path_buf(),
 				size: size_to_rect(data.size),
 				data: data.clone(),
