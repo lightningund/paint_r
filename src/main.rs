@@ -56,43 +56,43 @@ fn size_to_rect(size: [usize; 2]) -> Rect {
 
 type PixelCoord = [usize; 2];
 
-// From Wikipedia
-// Works going down-right and when dx > dy
-fn bresenham_oct(dx: i32, dy: i32) -> Vec<[i32; 2]> {
-	let mut points: Vec<[i32; 2]> = vec![];
+// Works in all directions
+fn bresenham_full(dx: i32, dy: i32) -> Vec<[i32; 2]> {
+	// Works going down-right
+	fn quad(dx: i32, dy: i32) -> Vec<[i32; 2]> {
+		// Works going down-right and when dx > dy
+		fn oct(dx: i32, dy: i32) -> Vec<[i32; 2]> {
+			// From Wikipedia
+			let mut points: Vec<[i32; 2]> = vec![];
 
-	let mut d = 2*dy - dx;
-	let mut y = 0;
+			let mut d = 2*dy - dx;
+			let mut y = 0;
 
-	for x in 0..=dx {
-		points.push([x, y]);
-		if d > 0 {
-			y += 1;
-			d += 2 * (dy - dx);
+			for x in 0..=dx {
+				points.push([x, y]);
+				if d > 0 {
+					y += 1;
+					d -= 2 * dx;
+				}
+
+				d += 2 * dy;
+			}
+
+			points
+		}
+
+		if dx < dy {
+			let points = oct(dy, dx);
+			return points.iter().map(|point| [point[1], point[0]]).collect();
 		} else {
-			d += 2 * dy;
+			let points = oct(dx, dy);
+			return points;
 		}
 	}
 
-	points
-}
-
-// Works going down-right
-fn bresenham_quad(dx: i32, dy: i32) -> Vec<[i32; 2]> {
-	if dx < dy {
-		let points = bresenham_oct(dy, dx);
-		return points.iter().map(|point| [point[1], point[0]]).collect();
-	} else {
-		let points = bresenham_oct(dx, dy);
-		return points;
-	}
-}
-
-// Works in all directions
-fn bresenham_full(dx: i32, dy: i32) -> Vec<[i32; 2]> {
 	let flipped_x = dx < 0;
 	let flipped_y = dy < 0;
-	return bresenham_quad(dx.abs(), dy.abs()).iter().map(|point| [
+	return quad(dx.abs(), dy.abs()).iter().map(|point| [
 		if flipped_x { -point[0] } else { point[0] },
 		if flipped_y { -point[1] } else { point[1] }
 	]).collect();
@@ -351,7 +351,6 @@ impl MyApp {
 			.drag_pan_buttons(egui::DragPanButtons::MIDDLE)
 			.zoom_range(0.0..=f32::INFINITY);
 
-		let res = egui::Label::new("").layout_in_ui(ui);
 		let cursor_readout = ui.label("").rect;
 
 		let mut inner_rect = Rect::NAN;
@@ -373,7 +372,7 @@ impl MyApp {
 			if coords[0] >= 0 && coords[1] >= 0 {
 				// TODO: Figure out how to actually place this next to the other info
 				ui.place(
-					cursor_readout.with_max_x(1000.0),
+					cursor_readout.with_max_x(300.0),
 					egui::Label::new(format!("Pointer Pos: {:?}", coords))
 						.halign(egui::Align::LEFT)
 						.extend()
