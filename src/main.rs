@@ -227,6 +227,13 @@ struct ImageCreator {
 	height: String,
 }
 
+#[derive(PartialEq)]
+enum Tool {
+	Eyedropper,
+	Pencil,
+	Select,
+}
+
 struct MyApp {
 	creating_img: Option<ImageCreator>, // If we currently have the create new image dialog up
 	save_after_release: bool, // Whether to save the undo state after each pixel or only when you stop clicking
@@ -235,6 +242,8 @@ struct MyApp {
 	scene_rect: Rect,
 	img: Option<TextureImage>,
 	last_coord: Option<PixelCoord>, // The coordinate of the last pixel we modified while dragging
+	tool: Tool,
+	selection: Option<egui::Rect>,
 }
 
 impl Default for MyApp {
@@ -247,6 +256,8 @@ impl Default for MyApp {
 			scene_rect: Rect::ZERO,
 			img: Default::default(),
 			last_coord: None,
+			tool: Tool::Pencil,
+			selection: Default::default(),
 		}
 	}
 }
@@ -277,6 +288,12 @@ impl eframe::App for MyApp {
 
 				ui.checkbox(&mut self.save_after_release, "Save After Release")
 					.on_hover_text("Whether to save the undo state after each pixel or only when you stop clicking");
+			});
+
+			ui.horizontal(|ui| {
+				ui.radio_value(&mut self.tool, Tool::Pencil, "Pencil");
+				ui.radio_value(&mut self.tool, Tool::Select, "Select");
+				ui.radio_value(&mut self.tool, Tool::Eyedropper, "Eyedropper");
 			});
 
 			self.image_creator_window(ui);
@@ -379,15 +396,32 @@ impl MyApp {
 				);
 			}
 
-			// The drawing on drag
-			if response.dragged_by(egui::PointerButton::Primary) || response.dragged_by(egui::PointerButton::Secondary) {
-				let coords = [pos.x as usize, pos.y as usize];
-				self.draw(coords, response.dragged_by(egui::PointerButton::Primary));
-			} else {
-				self.last_coord = None;
+			if self.tool == Tool::Pencil {
+				// The drawing on drag
+				if response.dragged_by(egui::PointerButton::Primary) || response.dragged_by(egui::PointerButton::Secondary) {
+					let coords = [pos.x as usize, pos.y as usize];
+					self.draw(coords, response.dragged_by(egui::PointerButton::Primary));
+				} else {
+					self.last_coord = None;
 
-				if self.save_after_release && let Some(img) = &mut self.img {
-					img.save_state();
+					if self.save_after_release && let Some(img) = &mut self.img {
+						img.save_state();
+					}
+				}
+			} else if self.tool == Tool::Select {
+
+			} else if self.tool == Tool::Eyedropper {
+				let coord = [pos.x as usize, pos.y as usize];
+				if let Some(img) = &self.img {
+					if coord[0] >= img.data.width() || coord[1] >= img.data.height() { return; }
+
+					let idx = coord_to_idx(coord, &img.data);
+
+					if response.dragged_by(egui::PointerButton::Primary) {
+						self.color = img.data.pixels[idx];
+					} else if response.dragged_by(egui::PointerButton::Secondary) {
+						self.secondary = img.data.pixels[idx];
+					}
 				}
 			}
 		}

@@ -12,7 +12,7 @@ Planned features:
 - unsaved exit warning
 - ~~dragging to draw~~
 - ~~color picker~~
-- eyedropper
+- ~~eyedropper~~
 - color palette
 - ~~create new image~~
 - toggleable pixel grid
