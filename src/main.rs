@@ -1,14 +1,10 @@
-use std::path::{Path, PathBuf};
-use eframe::egui::{self, Color32, Pos2};
-use egui::{Ui, TextureHandle, ColorImage, Rect, Widget as _};
-use image::{ImageReader};
+mod textureimage;
 
-static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
-	magnification: egui::TextureFilter::Nearest,
-	minification: egui::TextureFilter::Linear,
-	mipmap_mode: None,
-	wrap_mode: egui::TextureWrapMode::ClampToEdge,
-};
+use std::path::{Path};
+use eframe::egui::{self, Color32};
+use egui::{Ui, ColorImage, Rect, Widget as _};
+use image::{ImageReader};
+use crate::textureimage::*;
 
 fn main() -> eframe::Result {
 	let args: Vec<String> = std::env::args().collect();
@@ -49,12 +45,6 @@ fn load_image_from_path(path: &Path) -> Result<ColorImage, image::ImageError> {
 		pixels.as_slice(),
 	))
 }
-
-fn size_to_rect(size: [usize; 2]) -> Rect {
-	Rect::from_two_pos(Pos2::ZERO, Pos2::new(size[0] as f32, size[1] as f32))
-}
-
-type PixelCoord = [usize; 2];
 
 // Works in all directions
 fn bresenham_full(dx: i32, dy: i32) -> Vec<[i32; 2]> {
@@ -111,114 +101,6 @@ fn bresenham(start: PixelCoord, end: PixelCoord) -> Vec<PixelCoord> {
 		.skip(1) // skip the first one since it's the one from last frame
 		.map(|point| [(point[0] + x0) as usize, (point[1] + y0) as usize])
 		.collect()
-}
-
-fn pixel_from_coord(coord: PixelCoord, img: &ColorImage) -> Color32 {
-	img.pixels[coord[0] + coord[1] * img.width()]
-}
-
-fn coord_to_idx(coord: PixelCoord, img: &ColorImage) -> usize {
-	coord[0] + coord[1] * img.width()
-}
-
-struct PixelEdit {
-	oldcol: Color32,
-	coord: PixelCoord,
-}
-
-impl PixelEdit {
-	fn new(data: &ColorImage, coord: PixelCoord) -> Self {
-		PixelEdit {
-			oldcol: pixel_from_coord(coord, data),
-			coord
-		}
-	}
-}
-
-struct TextureImage {
-	saved: bool,
-	path: PathBuf,
-	size: Rect,
-	data: ColorImage,
-	handle: TextureHandle,
-	history: Vec<Vec<PixelEdit>>,
-	redos: Vec<Vec<PixelEdit>>,
-}
-
-impl TextureImage {
-	fn new(path: &Path, data: ColorImage, ctx: &egui::Context) -> Self {
-		TextureImage{
-			saved: false,
-			path: path.to_path_buf(),
-			size: size_to_rect(data.size),
-			data: data.clone(),
-			handle: ctx.load_texture("texture", data, TEX_OPTS),
-			history: Default::default(),
-			redos: Default::default(),
-		}
-	}
-
-	fn assign(&mut self, path: &Path, data: ColorImage) {
-		self.saved = false;
-		self.path = path.to_path_buf();
-		self.size = size_to_rect(data.size);
-		self.data = data.clone();
-		self.handle.set(data, TEX_OPTS);
-		self.history = Default::default();
-		self.redos = Default::default();
-	}
-
-	fn undo(&mut self) {
-		if let Some(edits) = self.history.pop() {
-			let mut redo: Vec<PixelEdit> = vec![];
-			for edit in edits.iter().rev() {
-				redo.push(PixelEdit::new(&self.data, edit.coord));
-				let idx = coord_to_idx(edit.coord, &self.data);
-				self.data.pixels[idx] = edit.oldcol;
-				self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
-			}
-			self.redos.push(redo);
-		}
-	}
-
-	fn mini_redo(&mut self, edit: PixelEdit) {
-		if self.history.is_empty() { self.history.push(vec![]); }
-		let top = self.history.last_mut().unwrap(); // we can unwrap here since we know there's at least one
-		top.push(PixelEdit::new(&self.data, edit.coord)); // add this edit to the current ongoing "Undo" edit
-		let idx = coord_to_idx(edit.coord, &self.data);
-		self.data.pixels[idx] = edit.oldcol;
-		self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
-	}
-
-	fn redo(&mut self) {
-		if let Some(edits) = self.redos.pop() {
-			for edit in edits {
-				self.mini_redo(edit);
-			}
-
-			self.save_state();
-		}
-	}
-
-	fn edit(&mut self, color: Color32, coord: PixelCoord) {
-		if coord[0] >= self.data.width() || coord[1] >= self.data.height() { return; }
-
-		if self.saved {
-			self.saved = false;
-			self.history.push(vec![]);
-		}
-
-		// Just make a new redo object and immediately apply it
-		self.redos.clear();
-		self.mini_redo(PixelEdit{
-			oldcol: color,
-			coord,
-		});
-	}
-
-	fn save_state(&mut self) {
-		self.saved = true;
-	}
 }
 
 #[derive(Default, Debug)]
