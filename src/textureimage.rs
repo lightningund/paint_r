@@ -15,7 +15,7 @@ fn size_to_rect(size: [usize; 2]) -> Rect {
 	Rect::from_two_pos(Pos2::ZERO, Pos2::new(size[0] as f32, size[1] as f32))
 }
 
-pub fn pixel_from_coord(coord: PixelCoord, img: &ColorImage) -> Color32 {
+fn pixel_from_coord(coord: PixelCoord, img: &ColorImage) -> Color32 {
 	img.pixels[coord[0] + coord[1] * img.width()]
 }
 
@@ -43,8 +43,8 @@ pub struct TextureImage {
 	pub size: Rect,
 	pub data: ColorImage,
 	pub handle: TextureHandle,
-	pub history: Vec<Vec<PixelEdit>>,
-	pub redos: Vec<Vec<PixelEdit>>,
+	history: Vec<Vec<PixelEdit>>,
+	redos: Vec<Vec<PixelEdit>>,
 }
 
 impl TextureImage {
@@ -120,5 +120,13 @@ impl TextureImage {
 
 	pub fn save_state(&mut self) {
 		self.saved = true;
+	}
+
+	pub fn has_undo(&self) -> bool {
+		!self.history.is_empty()
+	}
+
+	pub fn has_redo(&self) -> bool {
+		!self.redos.is_empty()
 	}
 }

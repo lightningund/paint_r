@@ -159,11 +159,11 @@ impl eframe::App for MyApp {
 				ui.color_edit_button_srgba(&mut self.secondary);
 
 				if let Some(img) = &mut self.img {
-					if ui.add_enabled(!img.history.is_empty(), egui::Button::new("Undo")).clicked() {
+					if ui.add_enabled(img.has_undo(), egui::Button::new("Undo")).clicked() {
 						img.undo();
 					}
 
-					if ui.add_enabled(!img.redos.is_empty(), egui::Button::new("Redo")).clicked() {
+					if ui.add_enabled(img.has_redo(), egui::Button::new("Redo")).clicked() {
 						img.redo();
 					}
 				}
@@ -245,30 +245,32 @@ impl MyApp {
 	}
 
 	fn scene_surface(&mut self, ui: &mut Ui) {
-		let scene = egui::Scene::new()
-			.sense(egui::Sense::DRAG)
-			.drag_pan_buttons(egui::DragPanButtons::MIDDLE)
-			.zoom_range(0.0..=f32::INFINITY);
+		if let Some(img) = &mut self.img {
+			let scene = egui::Scene::new()
+				.sense(egui::Sense::DRAG)
+				.drag_pan_buttons(egui::DragPanButtons::MIDDLE)
+				.zoom_range(0.0..=f32::INFINITY);
 
-		let cursor_readout = ui.label("").rect;
+			let cursor_readout = ui.label("").rect;
 
-		let mut inner_rect = Rect::NAN;
-		let response = scene
-			.show(ui, &mut self.scene_rect, |ui| {
-				if let Some(img) = &self.img { egui::Image::new(&img.handle).ui(ui); }
+			let mut inner_rect = Rect::NAN;
+			let response = scene.show(ui, &mut self.scene_rect, |ui| {
+				ui.image(&img.handle);
 				inner_rect = ui.min_rect();
-			})
-			.response;
+			}).response;
 
-		// Reset the view to be exactly large enough to contain the contents
-		if response.double_clicked() {
-			self.scene_rect = inner_rect;
-		}
+			// Reset the view to be exactly large enough to contain the contents
+			if response.double_clicked() {
+				self.scene_rect = inner_rect;
+			}
 
-		if response.contains_pointer() && let Some(pos) = response.hover_pos() {
-			// The position readout works on hover
-			let coords = [pos.x as i32, pos.y as i32];
-			if coords[0] >= 0 && coords[1] >= 0 {
+			if let Some(pos) = response.hover_pos() {
+				if pos.x < 0.0 || pos.y < 0.0 { return; }
+				if pos.x >= img.size.max.x || pos.y >= img.size.max.y { return; }
+
+				// Cast it to PixelCoord
+				let coords = [pos.x as usize, pos.y as usize];
+
 				// TODO: Figure out how to actually place this next to the other info
 				ui.place(
 					cursor_readout.with_max_x(300.0),
@@ -276,13 +278,8 @@ impl MyApp {
 						.halign(egui::Align::LEFT)
 						.extend()
 				);
-			}
 
-			if let Some(img) = &mut self.img {
-				let coords = [pos.x as usize, pos.y as usize];
-				if coords[0] >= img.data.width() || coords[1] >= img.data.height() { return; }
 				let idx = coord_to_idx(coords, &img.data);
-
 				match self.tool {
 					Tool::Pencil => {
 						if response.dragged_by(egui::PointerButton::Primary) || response.dragged_by(egui::PointerButton::Secondary) {
@@ -305,6 +302,7 @@ impl MyApp {
 						}
 					},
 					Tool::Select => {
+						// TODO
 					},
 				}
 			}
