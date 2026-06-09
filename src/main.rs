@@ -291,9 +291,9 @@ impl eframe::App for MyApp {
 			});
 
 			ui.horizontal(|ui| {
-				ui.radio_value(&mut self.tool, Tool::Pencil, "Pencil");
-				ui.radio_value(&mut self.tool, Tool::Select, "Select");
-				ui.radio_value(&mut self.tool, Tool::Eyedropper, "Eyedropper");
+				ui.selectable_value(&mut self.tool, Tool::Pencil, "Pencil");
+				ui.selectable_value(&mut self.tool, Tool::Select, "Select");
+				ui.selectable_value(&mut self.tool, Tool::Eyedropper, "Eyedropper");
 			});
 
 			self.image_creator_window(ui);
@@ -396,32 +396,34 @@ impl MyApp {
 				);
 			}
 
-			if self.tool == Tool::Pencil {
-				// The drawing on drag
-				if response.dragged_by(egui::PointerButton::Primary) || response.dragged_by(egui::PointerButton::Secondary) {
-					let coords = [pos.x as usize, pos.y as usize];
-					self.draw(coords, response.dragged_by(egui::PointerButton::Primary));
-				} else {
-					self.last_coord = None;
+			if let Some(img) = &mut self.img {
+				let coords = [pos.x as usize, pos.y as usize];
+				if coords[0] >= img.data.width() || coords[1] >= img.data.height() { return; }
+				let idx = coord_to_idx(coords, &img.data);
 
-					if self.save_after_release && let Some(img) = &mut self.img {
-						img.save_state();
-					}
-				}
-			} else if self.tool == Tool::Select {
+				match self.tool {
+					Tool::Pencil => {
+						if response.dragged_by(egui::PointerButton::Primary) || response.dragged_by(egui::PointerButton::Secondary) {
+							self.draw(coords, response.dragged_by(egui::PointerButton::Primary));
+						} else {
+							self.last_coord = None;
 
-			} else if self.tool == Tool::Eyedropper {
-				let coord = [pos.x as usize, pos.y as usize];
-				if let Some(img) = &self.img {
-					if coord[0] >= img.data.width() || coord[1] >= img.data.height() { return; }
-
-					let idx = coord_to_idx(coord, &img.data);
-
-					if response.dragged_by(egui::PointerButton::Primary) {
-						self.color = img.data.pixels[idx];
-					} else if response.dragged_by(egui::PointerButton::Secondary) {
-						self.secondary = img.data.pixels[idx];
-					}
+							if self.save_after_release {
+								img.save_state();
+							}
+						}
+					},
+					Tool::Eyedropper => {
+						if let Some(img) = &self.img {
+							if response.dragged_by(egui::PointerButton::Primary) {
+								self.color = img.data.pixels[idx];
+							} else if response.dragged_by(egui::PointerButton::Secondary) {
+								self.secondary = img.data.pixels[idx];
+							}
+						}
+					},
+					Tool::Select => {
+					},
 				}
 			}
 		}
