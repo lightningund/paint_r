@@ -2,7 +2,7 @@ mod textureimage;
 
 use std::path::{Path};
 use eframe::egui::{self, Color32};
-use egui::{Ui, ColorImage, Rect, Widget as _};
+use egui::{Ui, ColorImage, Rect};
 use image::{ImageReader};
 use crate::textureimage::*;
 

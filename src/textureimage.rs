@@ -11,6 +11,19 @@ static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 
 pub type PixelCoord = [usize; 2];
 
+trait Add {
+	type Output;
+	fn add(self, rhs: Self) -> Self::Output;
+}
+
+impl Add for PixelCoord {
+	type Output = PixelCoord;
+
+	fn add(self, rhs: Self) -> Self::Output {
+		[self[0] + rhs[0], self[1] + rhs[1]]
+	}
+}
+
 fn size_to_rect(size: [usize; 2]) -> Rect {
 	Rect::from_two_pos(Pos2::ZERO, Pos2::new(size[0] as f32, size[1] as f32))
 }
@@ -23,7 +36,7 @@ pub fn coord_to_idx(coord: PixelCoord, img: &ColorImage) -> usize {
 	coord[0] + coord[1] * img.width()
 }
 
-pub struct PixelEdit {
+struct PixelEdit {
 	oldcol: Color32,
 	coord: PixelCoord,
 }
@@ -116,6 +129,13 @@ impl TextureImage {
 			oldcol: color,
 			coord,
 		});
+	}
+
+	pub fn copy(&self, min: PixelCoord, max: PixelCoord) -> ColorImage {
+		self.data.region_by_pixels(min, [max[0] - min[0], max[1] - min[1]])
+	}
+
+	pub fn paste(&mut self, pos: PixelCoord, data: &ColorImage) {
 	}
 
 	pub fn save_state(&mut self) {
