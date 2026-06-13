@@ -234,7 +234,7 @@ impl eframe::App for MyApp {
 
 			if saving { self.save_img(); }
 
-			self.scene_surface(ui);
+			self.image_zone(ui);
 		});
 	}
 }
@@ -272,7 +272,8 @@ impl MyApp {
 		}
 	}
 
-	fn scene_surface(&mut self, ui: &mut Ui) {
+	/// The place where the actual image being edited is displayed
+	fn image_zone(&mut self, ui: &mut Ui) {
 		if let Some(img) = &mut self.img {
 			let scene = egui::Scene::new()
 				.sense(egui::Sense::DRAG)
@@ -284,10 +285,9 @@ impl MyApp {
 			let mut inner_rect = Rect::NAN;
 			let response = scene.show(ui, &mut self.scene_rect, |ui| {
 				ui.image(&img.handle);
-				// TODO: Figure out how to draw things relative to the image in here
 				if let Some(rect) = &self.selection {
 					let painter = ui.painter();
-					painter.rect_filled(rect.into(), 0, Color32::from_rgba_unmultiplied(0, 0, 128, 64));
+					painter.rect_filled(rect.into(), 0, Color32::from_rgba_unmultiplied(0, 0, 255, 64));
 				}
 				inner_rect = ui.min_rect();
 			}).response;
