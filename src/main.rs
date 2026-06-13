@@ -127,10 +127,10 @@ struct MyApp {
 	secondary: Color32,
 	scene_rect: Rect,
 	img: Option<TextureImage>,
+	interacting: bool,
 	last_coord: Option<PixelCoord>, // The coordinate of the last pixel we modified while dragging
 	tool: Tool,
 	selection: Option<PixRect>,
-	selecting: bool,
 	clipboard: Option<ColorImage>,
 }
 
@@ -138,15 +138,15 @@ impl Default for MyApp {
 	fn default() -> Self {
 		Self {
 			creating_img: None,
-			save_after_release: false,
+			save_after_release: true,
 			color: Color32::WHITE,
 			secondary: Color32::BLACK,
 			scene_rect: Rect::ZERO,
 			img: Default::default(),
+			interacting: false,
 			last_coord: None,
 			tool: Tool::Pencil,
 			selection: Default::default(),
-			selecting: false,
 			clipboard: Default::default(),
 		}
 	}
@@ -179,6 +179,20 @@ impl eframe::App for MyApp {
 						// We can unwrap here because the only way to click the button is if selection is some
 						self.clipboard = Some(img.copy(self.selection.unwrap()));
 					}
+
+					ui.ctx().input(|i| {
+						for evt in &i.events {
+							use egui::Event::*;
+							match evt {
+								Copy => {
+									if let Some(sel) = self.selection {
+										self.clipboard = Some(img.copy(sel));
+									}
+								},
+								_ => {}
+							}
+						}
+					});
 				}
 
 				ui.checkbox(&mut self.save_after_release, "Save After Release")
@@ -310,7 +324,7 @@ impl MyApp {
 
 		if response.drag_stopped() {
 			self.last_coord = None;
-			self.selecting = false;
+			self.interacting = false;
 
 			if self.save_after_release {
 				img.save_state();
@@ -333,10 +347,9 @@ impl MyApp {
 					}
 				},
 				Tool::Select => {
-					if self.selecting && let Some(rect) = &mut self.selection {
+					if self.interacting && let Some(rect) = &mut self.selection {
 						rect.b = coords;
 					} else {
-						self.selecting = true;
 						self.selection = Some(PixRect{
 							a: coords,
 							b: coords
@@ -344,10 +357,15 @@ impl MyApp {
 					}
 				},
 				Tool::Paste => {
-					let section = self.clipboard.take()?;
-					img.paste(coords, &section);
+					// Only do it on the first frame
+					if !self.interacting {
+						let section = self.clipboard.as_ref()?;
+						img.paste(coords, section);
+					}
 				},
 			}
+
+			self.interacting = true;
 		}
 
 		Some(())

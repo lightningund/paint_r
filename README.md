@@ -32,7 +32,9 @@ Planned features:
 - deleting selected
 - moving selected
 - ~~copying selected~~
+- copying to system clipboard
 - ~~pasting~~
+- pasting from system clipboard
 - rotating
 - canvas resize
 - canvas expand/shrink
