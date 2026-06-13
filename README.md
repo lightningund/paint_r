@@ -19,8 +19,8 @@ Planned features:
 - ~~usable as an "open with" program~~
 - ~~different colors on left and right click~~
 - checkerboard transparency background
-- layers
-- layer enabling
+- ~~layers~~
+- ~~layer enabling~~
 - layer reordering
 - layer renaming
 - layer blend modes

@@ -318,31 +318,27 @@ impl MyApp {
 	/// The place where the actual image being edited is displayed
 	fn image_zone(&mut self, ui: &mut Ui) {
 		let scene = egui::Scene::new()
-			.max_inner_size([100.0, 100.0])
 			.sense(egui::Sense::DRAG)
 			.drag_pan_buttons(egui::DragPanButtons::MIDDLE)
 			.zoom_range(0.0..=f32::INFINITY);
 
 		let mut inner_rect = Rect::NAN;
 		let response = scene.show(ui, &mut self.scene_rect, |ui| {
-			let img_pos = ui.cursor();
+			let mut img_pos = ui.cursor();
 			for layer in &mut self.layers {
 				if !layer.enabled { continue; }
 
-				ui.image(&layer.image.handle);
-				// ui.put(img_pos, egui::Image::new(&layer.image.handle));
+				img_pos.max = layer.image.size.max;
+				ui.put(img_pos, egui::Image::new(&layer.image.handle));
 			}
 
 			if let Some(rect) = &self.selection {
-				let painter = ui.painter();
+			let painter = ui.painter();
 				painter.rect_filled(rect.into(), 0, Color32::from_rgba_unmultiplied(0, 0, 255, 64));
 			}
 
 			inner_rect = ui.min_rect();
 		}).response;
-
-		let ctx = ui.ctx().clone();
-		ctx.memory_ui(ui);
 
 		// Reset the view to be exactly large enough to contain the contents
 		if response.double_clicked() {
