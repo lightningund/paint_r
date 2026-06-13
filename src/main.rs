@@ -6,6 +6,9 @@ use egui::{Ui, ColorImage, Rect};
 use image::{ImageReader};
 use crate::textureimage::*;
 
+use egui::PointerButton::Primary as PRIMARY_CLICK;
+use egui::PointerButton::Secondary as SECONDARY_CLICK;
+
 fn main() -> eframe::Result {
 	let args: Vec<String> = std::env::args().collect();
 
@@ -126,6 +129,8 @@ struct MyApp {
 	last_coord: Option<PixelCoord>, // The coordinate of the last pixel we modified while dragging
 	tool: Tool,
 	selection: Option<PixRect>,
+	selecting: bool,
+	clipboard: Option<ColorImage>,
 }
 
 impl Default for MyApp {
@@ -140,6 +145,8 @@ impl Default for MyApp {
 			last_coord: None,
 			tool: Tool::Pencil,
 			selection: Default::default(),
+			selecting: false,
+			clipboard: Default::default(),
 		}
 	}
 }
@@ -256,6 +263,11 @@ impl MyApp {
 			let mut inner_rect = Rect::NAN;
 			let response = scene.show(ui, &mut self.scene_rect, |ui| {
 				ui.image(&img.handle);
+				// TODO: Figure out how to draw things relative to the image in here
+				if let Some(rect) = &self.selection {
+					let painter = ui.painter();
+					painter.rect_filled(rect.into(), 0, Color32::from_rgba_unmultiplied(0, 0, 128, 64));
+				}
 				inner_rect = ui.min_rect();
 			}).response;
 
@@ -264,54 +276,72 @@ impl MyApp {
 				self.scene_rect = inner_rect;
 			}
 
-			if let Some(pos) = response.hover_pos() {
-				if pos.x < 0.0 || pos.y < 0.0 { return; }
-				if pos.x >= img.size.max.x || pos.y >= img.size.max.y { return; }
-
-				// Cast it to PixelCoord
-				let coords = [pos.x as usize, pos.y as usize];
-
-				// TODO: Figure out how to actually place this next to the other info
-				ui.place(
-					cursor_readout.with_max_x(300.0),
-					egui::Label::new(format!("Pointer Pos: {:?}", coords))
-						.halign(egui::Align::LEFT)
-						.extend()
-				);
-
-				let idx = coord_to_idx(coords, &img.data);
-				match self.tool {
-					Tool::Pencil => {
-						if response.dragged_by(egui::PointerButton::Primary) || response.dragged_by(egui::PointerButton::Secondary) {
-							self.draw(coords, response.dragged_by(egui::PointerButton::Primary));
-						} else {
-							self.last_coord = None;
-
-							if self.save_after_release {
-								img.save_state();
-							}
-						}
-					},
-					Tool::Eyedropper => {
-						if let Some(img) = &self.img {
-							if response.dragged_by(egui::PointerButton::Primary) {
-								self.color = img.data.pixels[idx];
-							} else if response.dragged_by(egui::PointerButton::Secondary) {
-								self.secondary = img.data.pixels[idx];
-							}
-						}
-					},
-					Tool::Select => {
-						// TODO
-					},
-				}
-			}
+			self.tool_process(ui, response, cursor_readout);
 		}
 	}
 }
 
 // Functional stuff
 impl MyApp {
+	fn tool_process(&mut self, ui: &mut Ui, response: egui::Response, label: Rect) -> Option<()> {
+		let img = self.img.as_mut()?;
+		let pos = response.hover_pos()?;
+
+		if pos.x < 0.0 || pos.y < 0.0 { return None; }
+		if pos.x >= img.size.max.x || pos.y >= img.size.max.y { return None; }
+
+		// Cast it to PixelCoord
+		let coords = [pos.x as usize, pos.y as usize];
+
+		// TODO: Figure out how to actually place this next to the other info
+		ui.place(
+			label.with_max_x(300.0),
+			egui::Label::new(format!("Pointer Pos: {:?}", coords))
+				.halign(egui::Align::LEFT)
+				.extend()
+		);
+
+		if response.drag_stopped() {
+			self.last_coord = None;
+			self.selecting = false;
+
+			if self.save_after_release {
+				img.save_state();
+			}
+		}
+
+		let idx = coord_to_idx(coords, &img.data);
+		let primary_down = response.dragged_by(PRIMARY_CLICK);
+		let secondary_down = response.dragged_by(SECONDARY_CLICK);
+		if primary_down || secondary_down {
+			match self.tool {
+				Tool::Pencil => {
+					self.draw(coords, primary_down);
+				},
+				Tool::Eyedropper => {
+					if primary_down {
+						self.color = img.data.pixels[idx];
+					} else if secondary_down {
+						self.secondary = img.data.pixels[idx];
+					}
+				},
+				Tool::Select => {
+					if self.selecting && let Some(rect) = &mut self.selection {
+						rect.max = coords;
+					} else {
+						self.selecting = true;
+						self.selection = Some(PixRect{
+							min: coords,
+							max: coords
+						});
+					}
+				},
+			}
+		}
+
+		Some(())
+	}
+
 	fn draw(&mut self, coords: PixelCoord, primary: bool) {
 		if self.last_coord.is_none_or(|last| coords != last) {
 			if let Some(img) = &mut self.img {

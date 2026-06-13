@@ -23,9 +23,26 @@ pub fn coord_to_idx(coord: PixelCoord, img: &ColorImage) -> usize {
 	coord[0] + coord[1] * img.width()
 }
 
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub struct PixRect {
-	min: PixelCoord,
-	max: PixelCoord,
+	pub min: PixelCoord,
+	pub max: PixelCoord,
+}
+
+impl From<PixRect> for Rect {
+	fn from(value: PixRect) -> Self {
+		Rect{
+			min: egui::Pos2::new(value.min[0] as f32, value.min[1] as f32),
+			max: egui::Pos2::new(value.max[0] as f32, value.max[1] as f32),
+		}
+	}
+}
+
+// TODO: This feels like probably bad practice?
+impl From<&PixRect> for Rect {
+	fn from(value: &PixRect) -> Self {
+		value.clone().into()
+	}
 }
 
 struct PixelEdit {
@@ -55,7 +72,7 @@ pub struct TextureImage {
 impl TextureImage {
 	pub fn new(path: &Path, data: ColorImage, ctx: &egui::Context) -> Self {
 		TextureImage{
-			saved: false,
+			saved: true,
 			path: path.to_path_buf(),
 			size: size_to_rect(data.size),
 			data: data.clone(),
@@ -66,7 +83,7 @@ impl TextureImage {
 	}
 
 	pub fn assign(&mut self, path: &Path, data: ColorImage) {
-		self.saved = false;
+		self.saved = true;
 		self.path = path.to_path_buf();
 		self.size = size_to_rect(data.size);
 		self.data = data.clone();
@@ -142,7 +159,16 @@ impl TextureImage {
 	}
 
 	pub fn paste(&mut self, pos: PixelCoord, data: &ColorImage) {
+		for src_y in 0..data.height() {
+			let dest_y = pos[1] + src_y;
+			for src_x in 0..data.width() {
+				let dest_x = pos[0] + src_x;
+				let coord: PixelCoord = [dest_x, dest_y];
+				self.edit(pixel_from_coord(coord, data), coord);
+			}
+		}
 
+		self.saved = true;
 	}
 
 	/// Mark the current edit as complete and push it to the history
