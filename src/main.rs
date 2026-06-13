@@ -136,6 +136,7 @@ struct MyApp {
 	tool: Tool,
 	selection: Option<PixRect>,
 	clipboard: Option<ColorImage>,
+	cursor_pos: Option<PixelCoord>,
 }
 
 impl Default for MyApp {
@@ -153,6 +154,7 @@ impl Default for MyApp {
 			tool: Tool::Pencil,
 			selection: Default::default(),
 			clipboard: Default::default(),
+			cursor_pos: Default::default(),
 		}
 	}
 }
@@ -160,13 +162,20 @@ impl Default for MyApp {
 impl eframe::App for MyApp {
 	// This is called every time the screen updates
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-		egui::CentralPanel::default().show_inside(ui, |ui| {
-			let mut opening = false;
-			let mut saving = false;
+		egui::Panel::top(ui.next_auto_id()).show_inside(ui, |ui| {
 			ui.horizontal(|ui| {
 				if ui.button("New").clicked() { self.creating_img = Some(Default::default()); }
-				opening = ui.button("Open").clicked();
-				saving = ui.add_enabled(!self.layers.is_empty(), Button::new("Save")).clicked();
+
+				if ui.button("Open").clicked() && let Some(path) = rfd::FileDialog::new().pick_file() {
+					if let Ok(image_data) = load_image_from_path(&path) {
+						self.assign_img(ui.ctx(), image_data, &path);
+					}
+				}
+
+				if ui.add_enabled(!self.layers.is_empty(), Button::new("Save")).clicked() {
+					self.save_img();
+				}
+
 				ui.color_edit_button_srgba(&mut self.color);
 				ui.label("/");
 				ui.color_edit_button_srgba(&mut self.secondary);
@@ -205,6 +214,7 @@ impl eframe::App for MyApp {
 					.on_hover_text("Whether to save the undo state after each pixel or only when you stop clicking");
 			});
 
+			// Tool selection
 			ui.horizontal(|ui| {
 				ui.selectable_value(&mut self.tool, Tool::Pencil, "Pencil");
 				ui.selectable_value(&mut self.tool, Tool::Select, "Select");
@@ -212,11 +222,7 @@ impl eframe::App for MyApp {
 				ui.add_enabled_ui(self.clipboard.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::Paste, "Paste"));
 			});
 
-			self.image_creator_window(ui);
-
-			self.layers(ui);
-
-			// Bresenham line test
+			// Bresenham line algorithm test
 			if ui.button("Test Lines").clicked() {
 				self.assign_img(ui.ctx(), ColorImage::filled([1000, 1000], Color32::WHITE), Path::new(""));
 				let mut quad_test = |dx: bool, dy: bool| {
@@ -233,17 +239,18 @@ impl eframe::App for MyApp {
 				quad_test(false, true);
 				quad_test(false, false);
 			}
-
-			if opening && let Some(path) = rfd::FileDialog::new().pick_file() {
-				if let Ok(image_data) = load_image_from_path(&path) {
-					self.assign_img(ui.ctx(), image_data, &path);
-				}
-			}
-
-			if saving { self.save_img(); }
-
-			self.image_zone(ui);
 		});
+
+		// Show the image creation window if needed
+		self.image_creator_window(ui);
+
+		// Show the layer selection panel
+		self.layers_panel(ui);
+
+		// Show the info on the bottom
+		self.status_bar(ui);
+
+		egui::CentralPanel::default().show_inside(ui, |ui| self.image_zone(ui));
 	}
 }
 
@@ -280,24 +287,31 @@ impl MyApp {
 		}
 	}
 
-	fn layers(&mut self, ui: &mut Ui) {
-		egui::Window::new("Layers")
-			.order(egui::Order::Foreground)
-			.show(ui.ctx(), |ui| {
-				if ui.button("New Layer").clicked() {
-					let size = self.layers[0].image.data.size;
-					self.layers.push(Layer{
-						image: TextureImage::new(Path::new(""), ColorImage::filled(size, Color32::TRANSPARENT), ui.ctx()),
-						enabled: true,
-					});
-				}
+	fn layers_panel(&mut self, ui: &mut Ui) {
+		egui::Panel::right(ui.next_auto_id()).show_inside(ui, |ui| {
+			ui.heading("Layers");
+			if ui.button("New Layer").clicked() {
+				let size = self.layers[0].image.data.size;
+				self.layers.push(Layer{
+					image: TextureImage::new(Path::new(""), ColorImage::filled(size, Color32::TRANSPARENT), ui.ctx()),
+					enabled: true,
+				});
+			}
 
-				for (idx, layer) in self.layers.iter_mut().enumerate() {
-					ui.horizontal(|ui| {
-						ui.checkbox(&mut layer.enabled, "");
-						ui.selectable_value(&mut self.curr_layer, idx, format!("{}", idx));
-					});
-				}
+			for (idx, layer) in self.layers.iter_mut().enumerate() {
+				ui.horizontal(|ui| {
+					ui.checkbox(&mut layer.enabled, "");
+					ui.selectable_value(&mut self.curr_layer, idx, format!("{}", idx));
+				});
+			}
+		});
+	}
+
+	fn status_bar(&self, ui: &mut Ui) {
+		egui::Panel::bottom(ui.next_auto_id()).show_inside(ui, |ui| {
+			if let Some(pos) = self.cursor_pos {
+				ui.label(format!("Pointer Pos: {:?}", pos));
+			}
 		});
 	}
 
@@ -309,16 +323,14 @@ impl MyApp {
 			.drag_pan_buttons(egui::DragPanButtons::MIDDLE)
 			.zoom_range(0.0..=f32::INFINITY);
 
-		let cursor_readout = ui.label("").rect;
-
 		let mut inner_rect = Rect::NAN;
 		let response = scene.show(ui, &mut self.scene_rect, |ui| {
 			let img_pos = ui.cursor();
 			for layer in &mut self.layers {
 				if !layer.enabled { continue; }
 
-				// ui.image(&layer.image.handle);
-				ui.put(img_pos, egui::Image::new(&layer.image.handle));
+				ui.image(&layer.image.handle);
+				// ui.put(img_pos, egui::Image::new(&layer.image.handle));
 			}
 
 			if let Some(rect) = &self.selection {
@@ -337,13 +349,14 @@ impl MyApp {
 			self.scene_rect = inner_rect;
 		}
 
-		self.tool_process(ui, response, cursor_readout);
+		self.tool_process(response);
 	}
 }
 
 // Functional stuff
 impl MyApp {
-	fn tool_process(&mut self, ui: &mut Ui, response: egui::Response, label: Rect) -> Option<()> {
+	fn tool_process(&mut self, response: egui::Response) -> Option<()> {
+		self.cursor_pos = None; // Reset it so that if the cursor is outside of the image, it stays None
 		let img = &mut self.layers.get_mut(self.curr_layer)?.image;
 		let pos = response.hover_pos()?;
 
@@ -352,14 +365,7 @@ impl MyApp {
 
 		// Cast it to PixelCoord
 		let coords = [pos.x as usize, pos.y as usize];
-
-		// TODO: Figure out how to actually place this next to the other info
-		ui.place(
-			label.with_max_x(300.0),
-			egui::Label::new(format!("Pointer Pos: {:?}", coords))
-				.halign(egui::Align::LEFT)
-				.extend()
-		);
+		self.cursor_pos = Some(coords);
 
 		if response.drag_stopped() {
 			self.last_coord = None;
