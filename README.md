@@ -18,6 +18,7 @@ Planned features:
 - toggleable pixel grid
 - ~~usable as an "open with" program~~
 - ~~different colors on left and right click~~
+- checkerboard transparency background
 - layers
 - layer enabling
 - layer reordering

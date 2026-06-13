@@ -125,7 +125,7 @@ struct MyApp {
 	img: Option<TextureImage>,
 	last_coord: Option<PixelCoord>, // The coordinate of the last pixel we modified while dragging
 	tool: Tool,
-	selection: Option<egui::Rect>,
+	selection: Option<PixRect>,
 }
 
 impl Default for MyApp {

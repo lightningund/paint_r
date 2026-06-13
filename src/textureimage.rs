@@ -11,20 +11,7 @@ static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 
 pub type PixelCoord = [usize; 2];
 
-trait Add {
-	type Output;
-	fn add(self, rhs: Self) -> Self::Output;
-}
-
-impl Add for PixelCoord {
-	type Output = PixelCoord;
-
-	fn add(self, rhs: Self) -> Self::Output {
-		[self[0] + rhs[0], self[1] + rhs[1]]
-	}
-}
-
-fn size_to_rect(size: [usize; 2]) -> Rect {
+fn size_to_rect(size: PixelCoord) -> Rect {
 	Rect::from_two_pos(Pos2::ZERO, Pos2::new(size[0] as f32, size[1] as f32))
 }
 
@@ -34,6 +21,11 @@ fn pixel_from_coord(coord: PixelCoord, img: &ColorImage) -> Color32 {
 
 pub fn coord_to_idx(coord: PixelCoord, img: &ColorImage) -> usize {
 	coord[0] + coord[1] * img.width()
+}
+
+pub struct PixRect {
+	min: PixelCoord,
+	max: PixelCoord,
 }
 
 struct PixelEdit {
@@ -83,14 +75,24 @@ impl TextureImage {
 		self.redos = Default::default();
 	}
 
+	/// Sets a portion of the image and updates the texture handle
+	///
+	/// Does not modify the history in any way
+	fn set_edit(&mut self, edit: &PixelEdit) {
+		let idx = coord_to_idx(edit.coord, &self.data);
+		self.data.pixels[idx] = edit.oldcol;
+		self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
+	}
+
+	/// Undoes the last edit and pushes it to the redo history
+	///
+	/// Does nothing if there is no history
 	pub fn undo(&mut self) {
 		if let Some(edits) = self.history.pop() {
 			let mut redo: Vec<PixelEdit> = vec![];
 			for edit in edits.iter().rev() {
 				redo.push(PixelEdit::new(&self.data, edit.coord));
-				let idx = coord_to_idx(edit.coord, &self.data);
-				self.data.pixels[idx] = edit.oldcol;
-				self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
+				self.set_edit(edit);
 			}
 			self.redos.push(redo);
 		}
@@ -100,11 +102,12 @@ impl TextureImage {
 		if self.history.is_empty() { self.history.push(vec![]); }
 		let top = self.history.last_mut().unwrap(); // we can unwrap here since we know there's at least one
 		top.push(PixelEdit::new(&self.data, edit.coord)); // add this edit to the current ongoing "Undo" edit
-		let idx = coord_to_idx(edit.coord, &self.data);
-		self.data.pixels[idx] = edit.oldcol;
-		self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
+		self.set_edit(&edit);
 	}
 
+	/// Redoes the last undone edit
+	///
+	/// Does nothing if there is no redo history
 	pub fn redo(&mut self) {
 		if let Some(edits) = self.redos.pop() {
 			for edit in edits {
@@ -115,6 +118,9 @@ impl TextureImage {
 		}
 	}
 
+	/// Set a single pixel to a color
+	///
+	/// Does nothing if the coordinates are out of the bounds of the image
 	pub fn edit(&mut self, color: Color32, coord: PixelCoord) {
 		if coord[0] >= self.data.width() || coord[1] >= self.data.height() { return; }
 
@@ -136,16 +142,24 @@ impl TextureImage {
 	}
 
 	pub fn paste(&mut self, pos: PixelCoord, data: &ColorImage) {
+
 	}
 
+	/// Mark the current edit as complete and push it to the history
 	pub fn save_state(&mut self) {
 		self.saved = true;
 	}
 
+	/// If there are edits to undo
+	///
+	/// It is undefined behaviour to call this if edits have been made since the last time `save_state` was called
 	pub fn has_undo(&self) -> bool {
 		!self.history.is_empty()
 	}
 
+	/// If there are edits to redo
+	///
+	/// Cleared whenever a manual edit is made
 	pub fn has_redo(&self) -> bool {
 		!self.redos.is_empty()
 	}
