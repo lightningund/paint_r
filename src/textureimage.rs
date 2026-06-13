@@ -63,6 +63,7 @@ impl PixRect {
 	}
 }
 
+#[derive(Default, Debug, Clone, Copy)]
 struct PixelEdit {
 	oldcol: Color32,
 	coord: PixelCoord,
@@ -77,14 +78,34 @@ impl PixelEdit {
 	}
 }
 
+#[derive(Default, Debug, Clone)]
+struct BlockEdit {
+	old: ColorImage,
+	coord: PixelCoord,
+}
+
+impl BlockEdit {
+	fn new(target: &ColorImage, data: &ColorImage, coord: PixelCoord) -> Self {
+		BlockEdit {
+			old: target.region_by_pixels(coord, data.size),
+			coord
+		}
+	}
+}
+
+enum Edit {
+	Pixels(Vec<PixelEdit>),
+	Block(BlockEdit),
+}
+
 pub struct TextureImage {
 	pub saved: bool,
 	pub path: PathBuf,
 	pub size: Rect,
 	pub data: ColorImage,
 	pub handle: TextureHandle,
-	history: Vec<Vec<PixelEdit>>,
-	redos: Vec<Vec<PixelEdit>>,
+	history: Vec<Edit>,
+	redos: Vec<Edit>,
 }
 
 impl TextureImage {
@@ -122,35 +143,85 @@ impl TextureImage {
 	/// Undoes the last edit and pushes it to the redo history
 	///
 	/// Does nothing if there is no history
+	///
+	/// It is undefined behaviour to call this if edits have been made since the last time `save_state` was called
 	pub fn undo(&mut self) {
-		if let Some(edits) = self.history.pop() {
-			let mut redo: Vec<PixelEdit> = vec![];
-			for edit in edits.iter().rev() {
-				redo.push(PixelEdit::new(&self.data, edit.coord));
-				self.set_edit(edit);
-			}
-			self.redos.push(redo);
-		}
-	}
+		match self.history.pop() {
+			Some(Edit::Pixels(edits)) => {
+				println!("Undoing pixel edits");
+				let mut redo: Vec<PixelEdit> = vec![];
+				for edit in edits.iter().rev() {
+					redo.push(PixelEdit::new(&self.data, edit.coord));
+					self.set_edit(edit);
+				}
+				self.redos.push(Edit::Pixels(redo));
+			},
+			Some(Edit::Block(block)) => {
+				println!("Undoing block edits");
+				let redo = BlockEdit::new(&self.data, &block.old, block.coord);
 
-	fn mini_redo(&mut self, edit: PixelEdit) {
-		if self.history.is_empty() { self.history.push(vec![]); }
-		let top = self.history.last_mut().unwrap(); // we can unwrap here since we know there's at least one
-		top.push(PixelEdit::new(&self.data, edit.coord)); // add this edit to the current ongoing "Undo" edit
-		self.set_edit(&edit);
+				for src_y in 0..block.old.height() {
+					// let src_range = (src_y * block.old.size[0])..((src_y + 1) * block.old.size[0]);
+
+					let dest_y = block.coord[1] + src_y;
+					// let dest_range = (dest_y * self.data.size[0])..(dest_y * self.data.size[0] + block.old.size[0]);
+
+					// self.data.pixels[dest_range].copy_from_slice(&block.old.pixels[src_range]);
+					for src_x in 0..block.old.width() {
+						let dest_x = block.coord[0] + src_x;
+						let src_idx = coord_to_idx([src_x, src_y], &block.old);
+						let dest_idx = coord_to_idx([dest_x, dest_y], &self.data);
+						self.data.pixels[dest_idx] = block.old.pixels[src_idx];
+					}
+				}
+
+				self.handle.set_partial(block.coord, block.old, TEX_OPTS);
+				self.redos.push(Edit::Block(redo));
+			},
+			None => {}
+		}
 	}
 
 	/// Redoes the last undone edit
 	///
 	/// Does nothing if there is no redo history
 	pub fn redo(&mut self) {
-		if let Some(edits) = self.redos.pop() {
-			for edit in edits {
-				self.mini_redo(edit);
-			}
+		match self.redos.pop() {
+			Some(Edit::Pixels(edits)) => {
+				println!("Redoing pixel edits");
+				let mut changes = vec![];
+				for edit in edits {
+					changes.push(PixelEdit::new(&self.data, edit.coord)); // add this edit to the current ongoing "Undo" edit
+					self.set_edit(&edit);
+				}
+				self.history.push(Edit::Pixels(changes));
+			},
+			Some(Edit::Block(block)) => {
+				println!("Redoing block edits");
+				let undo = BlockEdit::new(&self.data, &block.old, block.coord);
 
-			self.save_state();
+				for src_y in 0..block.old.height() {
+					// let src_range = (src_y * block.old.size[0])..((src_y + 1) * block.old.size[0]);
+
+					let dest_y = block.coord[1] + src_y;
+					// let dest_range = (dest_y * self.data.size[0])..(dest_y * self.data.size[0] + block.old.size[0]);
+
+					// self.data.pixels[dest_range].copy_from_slice(&block.old.pixels[src_range]);
+					for src_x in 0..block.old.width() {
+						let dest_x = block.coord[0] + src_x;
+						let src_idx = coord_to_idx([src_x, src_y], &block.old);
+						let dest_idx = coord_to_idx([dest_x, dest_y], &self.data);
+						self.data.pixels[dest_idx] = block.old.pixels[src_idx];
+					}
+				}
+
+				self.handle.set_partial(block.coord, block.old, TEX_OPTS);
+				self.history.push(Edit::Block(undo));
+			},
+			None => {}
 		}
+
+		self.save_state();
 	}
 
 	/// Set a single pixel to a color
@@ -161,15 +232,25 @@ impl TextureImage {
 
 		if self.saved {
 			self.saved = false;
-			self.history.push(vec![]);
+			self.history.push(Edit::Pixels(vec![]));
 		}
 
-		// Just make a new redo object and immediately apply it
-		self.redos.clear();
-		self.mini_redo(PixelEdit{
-			oldcol: color,
-			coord,
-		});
+		// If the last one isn't a pixels edit, then push one
+		match self.history.last() {
+			Some(Edit::Pixels(_)) => {},
+			_ => { self.history.push(Edit::Pixels(vec![])); }
+		}
+
+		// We know this is going to be true, but whatever I guess
+		// There's definitely a better way to do this
+		if let Some(Edit::Pixels(edits)) = self.history.last_mut() {
+			self.redos.clear();
+			edits.push(PixelEdit::new(&self.data, coord)); // add this edit to the current ongoing "Undo" edit
+			self.set_edit(&PixelEdit{
+				oldcol: color,
+				coord,
+			});
+		}
 	}
 
 	pub fn copy(&self, rect: PixRect) -> ColorImage {
@@ -179,15 +260,21 @@ impl TextureImage {
 	}
 
 	pub fn paste(&mut self, pos: PixelCoord, data: &ColorImage) {
-		for src_y in 0..data.height() {
-			let dest_y = pos[1] + src_y;
-			for src_x in 0..data.width() {
-				let dest_x = pos[0] + src_x;
-				let coord: PixelCoord = [dest_x, dest_y];
-				// TODO: There are definitely things I could do to optimize this for doing it repeatedly
-				self.edit(pixel_from_coord([src_x, src_y], data), coord);
-			}
-		}
+		self.redos.clear();
+		self.redos.push(Edit::Block(BlockEdit{
+			old: data.clone(),
+			coord: pos,
+		}));
+		self.redo();
+		// for src_y in 0..data.height() {
+		// 	let dest_y = pos[1] + src_y;
+		// 	for src_x in 0..data.width() {
+		// 		let dest_x = pos[0] + src_x;
+		// 		let coord: PixelCoord = [dest_x, dest_y];
+		// 		// TODO: There are definitely things I could do to optimize this for doing it repeatedly
+		// 		self.edit(pixel_from_coord([src_x, src_y], data), coord);
+		// 	}
+		// }
 
 		self.saved = true;
 	}
@@ -198,8 +285,6 @@ impl TextureImage {
 	}
 
 	/// If there are edits to undo
-	///
-	/// It is undefined behaviour to call this if edits have been made since the last time `save_state` was called
 	pub fn has_undo(&self) -> bool {
 		!self.history.is_empty()
 	}
