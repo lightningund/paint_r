@@ -1,10 +1,13 @@
 mod textureimage;
+mod layermanager;
 
 use std::path::{Path};
 use eframe::egui::{self, Color32, Button};
 use egui::{Ui, ColorImage, Rect};
 use image::{ImageReader};
+
 use crate::textureimage::*;
+use crate::layermanager::*;
 
 use egui::PointerButton::Primary as PRIMARY_CLICK;
 use egui::PointerButton::Secondary as SECONDARY_CLICK;
@@ -126,7 +129,8 @@ struct MyApp {
 	color: Color32, // RGB 0-255
 	secondary: Color32,
 	scene_rect: Rect,
-	img: Option<TextureImage>,
+	layers: Vec<Layer>,
+	curr_layer: usize,
 	interacting: bool,
 	last_coord: Option<PixelCoord>, // The coordinate of the last pixel we modified while dragging
 	tool: Tool,
@@ -142,7 +146,8 @@ impl Default for MyApp {
 			color: Color32::WHITE,
 			secondary: Color32::BLACK,
 			scene_rect: Rect::ZERO,
-			img: Default::default(),
+			layers: Default::default(),
+			curr_layer: 0,
 			interacting: false,
 			last_coord: None,
 			tool: Tool::Pencil,
@@ -161,12 +166,13 @@ impl eframe::App for MyApp {
 			ui.horizontal(|ui| {
 				if ui.button("New").clicked() { self.creating_img = Some(Default::default()); }
 				opening = ui.button("Open").clicked();
-				saving = ui.add_enabled(self.img.is_some(), Button::new("Save")).clicked();
+				saving = ui.add_enabled(!self.layers.is_empty(), Button::new("Save")).clicked();
 				ui.color_edit_button_srgba(&mut self.color);
 				ui.label("/");
 				ui.color_edit_button_srgba(&mut self.secondary);
 
-				if let Some(img) = &mut self.img {
+				if let Some(layer) = self.layers.get_mut(self.curr_layer) {
+					let img = &mut layer.image;
 					if ui.add_enabled(img.has_undo(), Button::new("Undo")).clicked() {
 						img.undo();
 					}
@@ -207,6 +213,8 @@ impl eframe::App for MyApp {
 			});
 
 			self.image_creator_window(ui);
+
+			self.layers(ui);
 
 			// Bresenham line test
 			if ui.button("Test Lines").clicked() {
@@ -272,40 +280,71 @@ impl MyApp {
 		}
 	}
 
+	fn layers(&mut self, ui: &mut Ui) {
+		egui::Window::new("Layers")
+			.order(egui::Order::Foreground)
+			.show(ui.ctx(), |ui| {
+				if ui.button("New Layer").clicked() {
+					let size = self.layers[0].image.data.size;
+					self.layers.push(Layer{
+						image: TextureImage::new(Path::new(""), ColorImage::filled(size, Color32::TRANSPARENT), ui.ctx()),
+						enabled: true,
+					});
+				}
+
+				for (idx, layer) in self.layers.iter_mut().enumerate() {
+					ui.horizontal(|ui| {
+						ui.checkbox(&mut layer.enabled, "");
+						ui.selectable_value(&mut self.curr_layer, idx, format!("{}", idx));
+					});
+				}
+		});
+	}
+
 	/// The place where the actual image being edited is displayed
 	fn image_zone(&mut self, ui: &mut Ui) {
-		if let Some(img) = &mut self.img {
-			let scene = egui::Scene::new()
-				.sense(egui::Sense::DRAG)
-				.drag_pan_buttons(egui::DragPanButtons::MIDDLE)
-				.zoom_range(0.0..=f32::INFINITY);
+		let scene = egui::Scene::new()
+			.max_inner_size([100.0, 100.0])
+			.sense(egui::Sense::DRAG)
+			.drag_pan_buttons(egui::DragPanButtons::MIDDLE)
+			.zoom_range(0.0..=f32::INFINITY);
 
-			let cursor_readout = ui.label("").rect;
+		let cursor_readout = ui.label("").rect;
 
-			let mut inner_rect = Rect::NAN;
-			let response = scene.show(ui, &mut self.scene_rect, |ui| {
-				ui.image(&img.handle);
-				if let Some(rect) = &self.selection {
-					let painter = ui.painter();
-					painter.rect_filled(rect.into(), 0, Color32::from_rgba_unmultiplied(0, 0, 255, 64));
-				}
-				inner_rect = ui.min_rect();
-			}).response;
+		let mut inner_rect = Rect::NAN;
+		let response = scene.show(ui, &mut self.scene_rect, |ui| {
+			let img_pos = ui.cursor();
+			for layer in &mut self.layers {
+				if !layer.enabled { continue; }
 
-			// Reset the view to be exactly large enough to contain the contents
-			if response.double_clicked() {
-				self.scene_rect = inner_rect;
+				// ui.image(&layer.image.handle);
+				ui.put(img_pos, egui::Image::new(&layer.image.handle));
 			}
 
-			self.tool_process(ui, response, cursor_readout);
+			if let Some(rect) = &self.selection {
+				let painter = ui.painter();
+				painter.rect_filled(rect.into(), 0, Color32::from_rgba_unmultiplied(0, 0, 255, 64));
+			}
+
+			inner_rect = ui.min_rect();
+		}).response;
+
+		let ctx = ui.ctx().clone();
+		ctx.memory_ui(ui);
+
+		// Reset the view to be exactly large enough to contain the contents
+		if response.double_clicked() {
+			self.scene_rect = inner_rect;
 		}
+
+		self.tool_process(ui, response, cursor_readout);
 	}
 }
 
 // Functional stuff
 impl MyApp {
 	fn tool_process(&mut self, ui: &mut Ui, response: egui::Response, label: Rect) -> Option<()> {
-		let img = self.img.as_mut()?;
+		let img = &mut self.layers.get_mut(self.curr_layer)?.image;
 		let pos = response.hover_pos()?;
 
 		if pos.x < 0.0 || pos.y < 0.0 { return None; }
@@ -373,7 +412,8 @@ impl MyApp {
 
 	fn draw(&mut self, coords: PixelCoord, primary: bool) {
 		if self.last_coord.is_none_or(|last| coords != last) {
-			if let Some(img) = &mut self.img {
+			if let Some(layer) = &mut self.layers.get_mut(self.curr_layer) {
+				let img = &mut layer.image;
 				let color = if primary { self.color } else { self.secondary };
 
 				if let Some(last) = self.last_coord {
@@ -396,33 +436,32 @@ impl MyApp {
 	}
 
 	fn save_img(&self) {
-		if let Some(img) = &self.img && let Some(path) = rfd::FileDialog::new()
-			.set_directory(img.path.parent().map(|p| p.to_path_buf()).unwrap_or(Default::default()))
-			.set_file_name(img.path.file_name().and_then(|f| f.to_str()).unwrap_or("image.png"))
-			.save_file() {
-			let buf_opt = image::ImageBuffer::<image::Rgba<u8>, _>::from_vec(
-				img.data.width() as u32,
-				img.data.height() as u32,
-				img.data.pixels.iter().flat_map(|col| col.to_array()).collect()
-			);
-			if let Some(buf) = buf_opt {
-				let res = buf.save(path);
-				if let Err(err) = res {
-					println!("Saving didn't work :( {}", err);
-				}
-			} else {
-				println!("Making the buffer didn't work :(");
-			}
-		}
+		// TODO: FIGURE OUT HOW TO SAVE MULTIPLE LAYERS
+		// if let Some(img) = &self.img && let Some(path) = rfd::FileDialog::new()
+		// 	.set_directory(img.path.parent().map(|p| p.to_path_buf()).unwrap_or(Default::default()))
+		// 	.set_file_name(img.path.file_name().and_then(|f| f.to_str()).unwrap_or("image.png"))
+		// 	.save_file() {
+		// 	let buf_opt = image::ImageBuffer::<image::Rgba<u8>, _>::from_vec(
+		// 		img.data.width() as u32,
+		// 		img.data.height() as u32,
+		// 		img.data.pixels.iter().flat_map(|col| col.to_array()).collect()
+		// 	);
+		// 	if let Some(buf) = buf_opt {
+		// 		let res = buf.save(path);
+		// 		if let Err(err) = res {
+		// 			println!("Saving didn't work :( {}", err);
+		// 		}
+		// 	} else {
+		// 		println!("Making the buffer didn't work :(");
+		// 	}
+		// }
 	}
 
 	fn assign_img(&mut self, ctx: &egui::Context, data: ColorImage, path: &Path) {
-		// If we have an image already, just update it
-		if let Some(img) = &mut self.img {
-			img.assign(path, data);
-		} else {
-			self.img = Some(TextureImage::new(path, data, ctx));
-		}
+		self.layers.push(Layer{
+			image: TextureImage::new(path, data, ctx),
+			enabled: true,
+		});
 
 		// force a zoom reset
 		self.scene_rect = Rect::NAN;
