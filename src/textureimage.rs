@@ -159,24 +159,33 @@ impl TextureImage {
 			Some(Edit::Block(block)) => {
 				println!("Undoing block edits");
 				let redo = BlockEdit::new(&self.data, &block.old, block.coord);
+				self.handle.set_partial(block.coord, self.data.region_by_pixels(block.coord, block.old.size), TEX_OPTS);
+				self.redos.push(Edit::Block(redo));
 
-				for src_y in 0..block.old.height() {
-					// let src_range = (src_y * block.old.size[0])..((src_y + 1) * block.old.size[0]);
+				let src_range = (0..block.old.height()).flat_map(|y| {
+					let y_idx = y * block.old.width();
+					y_idx..(y_idx + block.old.width())
+				});
+				// Has to be a collected vec so that we actually evaluate it and can use self.data again
+				let dest_indices = (0..block.old.height()).flat_map(|y| {
+					let y_idx = (y + block.coord[1]) * self.data.width();
+					let start = y_idx + block.coord[0];
+					start..(start + block.old.width())
+				}).collect::<Vec<_>>();
 
-					let dest_y = block.coord[1] + src_y;
-					// let dest_range = (dest_y * self.data.size[0])..(dest_y * self.data.size[0] + block.old.size[0]);
-
-					// self.data.pixels[dest_range].copy_from_slice(&block.old.pixels[src_range]);
-					for src_x in 0..block.old.width() {
-						let dest_x = block.coord[0] + src_x;
-						let src_idx = coord_to_idx([src_x, src_y], &block.old);
-						let dest_idx = coord_to_idx([dest_x, dest_y], &self.data);
-						self.data.pixels[dest_idx] = block.old.pixels[src_idx];
-					}
+				for (src_idx, dest_idx) in src_range.zip(dest_indices.iter()) {
+					self.data.pixels[*dest_idx] = block.old.pixels[src_idx];
 				}
 
-				self.handle.set_partial(block.coord, block.old, TEX_OPTS);
-				self.redos.push(Edit::Block(redo));
+				// for src_y in 0..block.old.height() {
+				// 	let dest_y = block.coord[1] + src_y;
+				// 	for src_x in 0..block.old.width() {
+				// 		let dest_x = block.coord[0] + src_x;
+				// 		let src_idx = coord_to_idx([src_x, src_y], &block.old);
+				// 		let dest_idx = coord_to_idx([dest_x, dest_y], &self.data);
+				// 		self.data.pixels[dest_idx] = block.old.pixels[src_idx];
+				// 	}
+				// }
 			},
 			None => {}
 		}
