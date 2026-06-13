@@ -1,7 +1,7 @@
 mod textureimage;
 
 use std::path::{Path};
-use eframe::egui::{self, Color32};
+use eframe::egui::{self, Color32, Button};
 use egui::{Ui, ColorImage, Rect};
 use image::{ImageReader};
 use crate::textureimage::*;
@@ -117,6 +117,7 @@ enum Tool {
 	Eyedropper,
 	Pencil,
 	Select,
+	Paste,
 }
 
 struct MyApp {
@@ -160,18 +161,23 @@ impl eframe::App for MyApp {
 			ui.horizontal(|ui| {
 				if ui.button("New").clicked() { self.creating_img = Some(Default::default()); }
 				opening = ui.button("Open").clicked();
-				saving = ui.add_enabled(self.img.is_some(), egui::Button::new("Save")).clicked();
+				saving = ui.add_enabled(self.img.is_some(), Button::new("Save")).clicked();
 				ui.color_edit_button_srgba(&mut self.color);
 				ui.label("/");
 				ui.color_edit_button_srgba(&mut self.secondary);
 
 				if let Some(img) = &mut self.img {
-					if ui.add_enabled(img.has_undo(), egui::Button::new("Undo")).clicked() {
+					if ui.add_enabled(img.has_undo(), Button::new("Undo")).clicked() {
 						img.undo();
 					}
 
-					if ui.add_enabled(img.has_redo(), egui::Button::new("Redo")).clicked() {
+					if ui.add_enabled(img.has_redo(), Button::new("Redo")).clicked() {
 						img.redo();
+					}
+
+					if ui.add_enabled(self.selection.is_some(), Button::new("Copy")).clicked() {
+						// We can unwrap here because the only way to click the button is if selection is some
+						self.clipboard = Some(img.copy(self.selection.unwrap()));
 					}
 				}
 
@@ -183,6 +189,7 @@ impl eframe::App for MyApp {
 				ui.selectable_value(&mut self.tool, Tool::Pencil, "Pencil");
 				ui.selectable_value(&mut self.tool, Tool::Select, "Select");
 				ui.selectable_value(&mut self.tool, Tool::Eyedropper, "Eyedropper");
+				ui.add_enabled_ui(self.clipboard.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::Paste, "Paste"));
 			});
 
 			self.image_creator_window(ui);
@@ -327,14 +334,18 @@ impl MyApp {
 				},
 				Tool::Select => {
 					if self.selecting && let Some(rect) = &mut self.selection {
-						rect.max = coords;
+						rect.b = coords;
 					} else {
 						self.selecting = true;
 						self.selection = Some(PixRect{
-							min: coords,
-							max: coords
+							a: coords,
+							b: coords
 						});
 					}
+				},
+				Tool::Paste => {
+					let section = self.clipboard.take()?;
+					img.paste(coords, &section);
 				},
 			}
 		}

@@ -25,15 +25,17 @@ pub fn coord_to_idx(coord: PixelCoord, img: &ColorImage) -> usize {
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub struct PixRect {
-	pub min: PixelCoord,
-	pub max: PixelCoord,
+	pub a: PixelCoord,
+	pub b: PixelCoord,
 }
 
 impl From<PixRect> for Rect {
 	fn from(value: PixRect) -> Self {
+		let min = value.min();
+		let max = value.max();
 		Rect{
-			min: egui::Pos2::new(value.min[0] as f32, value.min[1] as f32),
-			max: egui::Pos2::new(value.max[0] as f32, value.max[1] as f32),
+			min: egui::Pos2::new(min[0] as f32, min[1] as f32),
+			max: egui::Pos2::new(max[0] as f32, max[1] as f32),
 		}
 	}
 }
@@ -42,6 +44,22 @@ impl From<PixRect> for Rect {
 impl From<&PixRect> for Rect {
 	fn from(value: &PixRect) -> Self {
 		value.clone().into()
+	}
+}
+
+impl PixRect {
+	fn min(self) -> PixelCoord {
+		[
+			self.a[0].min(self.b[0]),
+			self.a[1].min(self.b[1])
+		]
+	}
+
+	fn max(self) -> PixelCoord {
+		[
+			self.a[0].max(self.b[0]),
+			self.a[1].max(self.b[1])
+		]
 	}
 }
 
@@ -154,7 +172,9 @@ impl TextureImage {
 		});
 	}
 
-	pub fn copy(&self, min: PixelCoord, max: PixelCoord) -> ColorImage {
+	pub fn copy(&self, rect: PixRect) -> ColorImage {
+		let min = rect.min();
+		let max = rect.max();
 		self.data.region_by_pixels(min, [max[0] - min[0], max[1] - min[1]])
 	}
 
@@ -164,7 +184,8 @@ impl TextureImage {
 			for src_x in 0..data.width() {
 				let dest_x = pos[0] + src_x;
 				let coord: PixelCoord = [dest_x, dest_y];
-				self.edit(pixel_from_coord(coord, data), coord);
+				// TODO: There are definitely things I could do to optimize this for doing it repeatedly
+				self.edit(pixel_from_coord([src_x, src_y], data), coord);
 			}
 		}
 

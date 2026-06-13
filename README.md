@@ -26,13 +26,13 @@ Planned features:
 - layer blend modes
 - layer opacity
 - adding images over the current canvas
-- selecting
+- ~~selecting~~
 - expanding selection
 - subtracting selection
 - deleting selected
 - moving selected
-- copying selected
-- pasting
+- ~~copying selected~~
+- ~~pasting~~
 - rotating
 - canvas resize
 - canvas expand/shrink
