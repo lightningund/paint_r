@@ -2,8 +2,8 @@ mod textureimage;
 mod layermanager;
 
 use std::path::{Path};
-use eframe::egui::{self, Color32, Button};
-use egui::{Ui, ColorImage, Rect};
+use eframe::egui;
+use egui::{Color32, Button, Ui, ColorImage, Rect};
 use image::{ImageReader};
 
 use crate::textureimage::*;
@@ -129,9 +129,8 @@ struct MyApp {
 	color: Color32, // RGB 0-255
 	secondary: Color32,
 	scene_rect: Rect,
-	layers: Vec<Layer>,
-	curr_layer: usize,
 	interacting: bool,
+	layers: LayerManager,
 	last_coord: Option<PixelCoord>, // The coordinate of the last pixel we modified while dragging
 	tool: Tool,
 	selection: Option<PixRect>,
@@ -148,7 +147,6 @@ impl Default for MyApp {
 			secondary: Color32::BLACK,
 			scene_rect: Rect::ZERO,
 			layers: Default::default(),
-			curr_layer: 0,
 			interacting: false,
 			last_coord: None,
 			tool: Tool::Pencil,
@@ -180,7 +178,7 @@ impl eframe::App for MyApp {
 				ui.label("/");
 				ui.color_edit_button_srgba(&mut self.secondary);
 
-				if let Some(layer) = self.layers.get_mut(self.curr_layer) {
+				if let Some(layer) = self.layers.get_active_mut() {
 					let img = &mut layer.image;
 					if ui.add_enabled(img.has_undo(), Button::new("Undo")).clicked() {
 						img.undo();
@@ -245,7 +243,7 @@ impl eframe::App for MyApp {
 		self.image_creator_window(ui);
 
 		// Show the layer selection panel
-		self.layers_panel(ui);
+		self.layers.draw_panel(ui);
 
 		// Show the info on the bottom
 		self.status_bar(ui);
@@ -287,26 +285,6 @@ impl MyApp {
 		}
 	}
 
-	fn layers_panel(&mut self, ui: &mut Ui) {
-		egui::Panel::right(ui.next_auto_id()).show_inside(ui, |ui| {
-			ui.heading("Layers");
-			if ui.button("New Layer").clicked() {
-				let size = self.layers[0].image.data.size;
-				self.layers.push(Layer{
-					image: TextureImage::new(Path::new(""), ColorImage::filled(size, Color32::TRANSPARENT), ui.ctx()),
-					enabled: true,
-				});
-			}
-
-			for (idx, layer) in self.layers.iter_mut().enumerate() {
-				ui.horizontal(|ui| {
-					ui.checkbox(&mut layer.enabled, "");
-					ui.selectable_value(&mut self.curr_layer, idx, format!("{}", idx));
-				});
-			}
-		});
-	}
-
 	fn status_bar(&self, ui: &mut Ui) {
 		egui::Panel::bottom(ui.next_auto_id()).show_inside(ui, |ui| {
 			if let Some(pos) = self.cursor_pos {
@@ -324,13 +302,7 @@ impl MyApp {
 
 		let mut inner_rect = Rect::NAN;
 		let response = scene.show(ui, &mut self.scene_rect, |ui| {
-			let mut img_pos = ui.cursor();
-			for layer in &mut self.layers {
-				if !layer.enabled { continue; }
-
-				img_pos.max = layer.image.size.max;
-				ui.put(img_pos, egui::Image::new(&layer.image.handle));
-			}
+			self.layers.draw_layers(ui);
 
 			if let Some(rect) = &self.selection {
 			let painter = ui.painter();
@@ -353,7 +325,7 @@ impl MyApp {
 impl MyApp {
 	fn tool_process(&mut self, response: egui::Response) -> Option<()> {
 		self.cursor_pos = None; // Reset it so that if the cursor is outside of the image, it stays None
-		let img = &mut self.layers.get_mut(self.curr_layer)?.image;
+		let img = &mut self.layers.get_active_mut()?.image;
 		let pos = response.hover_pos()?;
 
 		if pos.x < 0.0 || pos.y < 0.0 { return None; }
@@ -414,7 +386,7 @@ impl MyApp {
 
 	fn draw(&mut self, coords: PixelCoord, primary: bool) {
 		if self.last_coord.is_none_or(|last| coords != last) {
-			if let Some(layer) = &mut self.layers.get_mut(self.curr_layer) {
+			if let Some(layer) = &mut self.layers.get_active_mut() {
 				let img = &mut layer.image;
 				let color = if primary { self.color } else { self.secondary };
 
@@ -460,10 +432,7 @@ impl MyApp {
 	}
 
 	fn assign_img(&mut self, ctx: &egui::Context, data: ColorImage, path: &Path) {
-		self.layers.push(Layer{
-			image: TextureImage::new(path, data, ctx),
-			enabled: true,
-		});
+		self.layers.add_layer(TextureImage::new(data, ctx));
 
 		// force a zoom reset
 		self.scene_rect = Rect::NAN;

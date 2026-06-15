@@ -1,6 +1,5 @@
-use std::path::{Path, PathBuf};
-use eframe::egui::{self, Color32};
-use egui::{TextureHandle, ColorImage, Rect, Pos2};
+use eframe::egui;
+use egui::{Color32, TextureHandle, ColorImage, Rect, Pos2};
 
 static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 	magnification: egui::TextureFilter::Nearest,
@@ -23,7 +22,7 @@ pub fn coord_to_idx(coord: PixelCoord, img: &ColorImage) -> usize {
 	coord[0] + coord[1] * img.width()
 }
 
-#[derive(Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PixRect {
 	pub a: PixelCoord,
 	pub b: PixelCoord,
@@ -100,7 +99,6 @@ enum Edit {
 
 pub struct TextureImage {
 	pub saved: bool,
-	pub path: PathBuf,
 	pub size: Rect,
 	pub data: ColorImage,
 	pub handle: TextureHandle,
@@ -109,10 +107,9 @@ pub struct TextureImage {
 }
 
 impl TextureImage {
-	pub fn new(path: &Path, data: ColorImage, ctx: &egui::Context) -> Self {
+	pub fn new(data: ColorImage, ctx: &egui::Context) -> Self {
 		TextureImage{
 			saved: true,
-			path: path.to_path_buf(),
 			size: size_to_rect(data.size),
 			data: data.clone(),
 			handle: ctx.load_texture("texture", data, TEX_OPTS),
@@ -121,9 +118,8 @@ impl TextureImage {
 		}
 	}
 
-	pub fn assign(&mut self, path: &Path, data: ColorImage) {
+	pub fn assign(&mut self, data: ColorImage) {
 		self.saved = true;
-		self.path = path.to_path_buf();
 		self.size = size_to_rect(data.size);
 		self.data = data.clone();
 		self.handle.set(data, TEX_OPTS);
