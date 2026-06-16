@@ -47,14 +47,14 @@ impl From<&PixRect> for Rect {
 }
 
 impl PixRect {
-	fn min(self) -> PixelCoord {
+	fn min(&self) -> PixelCoord {
 		[
 			self.a[0].min(self.b[0]),
 			self.a[1].min(self.b[1])
 		]
 	}
 
-	fn max(self) -> PixelCoord {
+	fn max(&self) -> PixelCoord {
 		[
 			self.a[0].max(self.b[0]),
 			self.a[1].max(self.b[1])

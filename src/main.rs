@@ -212,14 +212,6 @@ impl eframe::App for MyApp {
 					.on_hover_text("Whether to save the undo state after each pixel or only when you stop clicking");
 			});
 
-			// Tool selection
-			ui.horizontal(|ui| {
-				ui.selectable_value(&mut self.tool, Tool::Pencil, "Pencil");
-				ui.selectable_value(&mut self.tool, Tool::Select, "Select");
-				ui.selectable_value(&mut self.tool, Tool::Eyedropper, "Eyedropper");
-				ui.add_enabled_ui(self.clipboard.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::Paste, "Paste"));
-			});
-
 			// Bresenham line algorithm test
 			if ui.button("Test Lines").clicked() {
 				self.assign_img(ui.ctx(), ColorImage::filled([1000, 1000], Color32::WHITE), Path::new(""));
@@ -242,11 +234,13 @@ impl eframe::App for MyApp {
 		// Show the image creation window if needed
 		self.image_creator_window(ui);
 
-		// Show the layer selection panel
-		self.layers.draw_panel(ui);
-
 		// Show the info on the bottom
 		self.status_bar(ui);
+
+		self.tool_panel(ui);
+
+		// Show the layer selection panel
+		self.layers.draw_panel(ui);
 
 		egui::CentralPanel::default().show_inside(ui, |ui| self.image_zone(ui));
 	}
@@ -290,6 +284,16 @@ impl MyApp {
 			if let Some(pos) = self.cursor_pos {
 				ui.label(format!("Pointer Pos: {:?}", pos));
 			}
+		});
+	}
+
+	// Tool selection
+	fn tool_panel(&mut self, ui: &mut Ui) {
+		egui::Panel::left(ui.next_auto_id()).show_inside(ui, |ui| {
+			ui.selectable_value(&mut self.tool, Tool::Pencil, "Pencil");
+			ui.selectable_value(&mut self.tool, Tool::Select, "Select");
+			ui.selectable_value(&mut self.tool, Tool::Eyedropper, "Eyedropper");
+			ui.add_enabled_ui(self.clipboard.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::Paste, "Paste"));
 		});
 	}
 

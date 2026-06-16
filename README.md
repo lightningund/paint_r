@@ -22,9 +22,10 @@ Planned features:
 - ~~layers~~
 - ~~layer enabling~~
 - layer reordering
-- layer renaming
+- ~~layer renaming~~
 - layer blend modes
 - layer opacity
+- keyboard shortcuts
 - adding images over the current canvas
 - ~~selecting~~
 - expanding selection

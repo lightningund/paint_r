@@ -20,24 +20,15 @@ impl std::error::Error for DimensionError {}
 pub struct Layer {
 	pub image: TextureImage,
 	pub enabled: bool,
+	pub name: String,
 }
 
+#[derive(Default)]
 pub struct LayerManager {
+	size: PixelCoord,
 	layers: Vec<Layer>,
 	curr_layer: usize,
-	size: PixelCoord,
-	f_size: egui::Rect,
-}
-
-impl Default for LayerManager {
-	fn default() -> Self {
-		Self {
-			layers: Default::default(),
-			curr_layer: Default::default(),
-			size: Default::default(),
-			f_size: egui::Rect::NAN,
-		}
-	}
+	renaming_layer: Option<usize>,
 }
 
 impl LayerManager {
@@ -63,7 +54,7 @@ impl LayerManager {
 			return Err(DimensionError{ target_size: self.size, actual_size: img.data.size });
 		}
 
-		self.layers.push(Layer{ image: img, enabled: true });
+		self.layers.push(Layer{ image: img, enabled: true, name: format!("Layer {}", self.layers.len()) });
 		Ok(self.layers.last().unwrap())
 	}
 
@@ -83,12 +74,22 @@ impl LayerManager {
 				self.add_empty_layer(ui.ctx());
 			}
 
-			for (idx, layer) in self.layers.iter_mut().enumerate() {
+			for (idx, layer) in self.layers.iter_mut().enumerate().rev() {
 				ui.horizontal(|ui| {
 					ui.checkbox(&mut layer.enabled, "");
-					ui.selectable_value(&mut self.curr_layer, idx, format!("{}", idx)).context_menu(|ui| {
-						// TODO: add settings for name changing, blending mode, opacity, delete
-					});
+
+					if Some(idx) == self.renaming_layer {
+						if ui.text_edit_singleline(&mut layer.name).lost_focus() {
+							self.renaming_layer = None;
+						}
+					} else {
+						ui.selectable_value(&mut self.curr_layer, idx, format!("{}", layer.name)).context_menu(|ui| {
+							// TODO: add settings for blending mode, opacity, delete
+							if ui.button("Rename").clicked() {
+								self.renaming_layer = Some(idx);
+							}
+						});
+					}
 				});
 			}
 		});
