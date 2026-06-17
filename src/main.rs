@@ -246,6 +246,15 @@ impl eframe::App for MyApp {
 	}
 }
 
+/// Sets a value if a given key was pressed this frame
+///
+/// Includes repeat key events
+fn set_if_key<T>(ctx: &egui::Context, key: egui::Key, target: &mut T, val: T) {
+	if ctx.input(|i| i.key_pressed(key)) {
+		*target = val;
+	}
+}
+
 // UI Elements
 impl MyApp {
 	fn image_creator_window(&mut self, ui: &mut Ui) {
@@ -295,6 +304,12 @@ impl MyApp {
 			ui.selectable_value(&mut self.tool, Tool::Eyedropper, "Eyedropper");
 			ui.add_enabled_ui(self.clipboard.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::Paste, "Paste"));
 		});
+
+		// Also check for shortcuts
+		set_if_key(ui.ctx(), egui::Key::P, &mut self.tool, Tool::Pencil);
+		set_if_key(ui.ctx(), egui::Key::S, &mut self.tool, Tool::Select);
+		set_if_key(ui.ctx(), egui::Key::K, &mut self.tool, Tool::Eyedropper);
+		// TODO: Check for modifier shortcuts (new, open, save, save as, deselect, copy, paste)
 	}
 
 	/// The place where the actual image being edited is displayed
