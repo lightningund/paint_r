@@ -1,6 +1,8 @@
 use eframe::egui;
 use egui::{Color32, TextureHandle, ColorImage, Rect, Pos2};
 
+pub type PixelCoord = [usize; 2];
+
 static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 	magnification: egui::TextureFilter::Nearest,
 	minification: egui::TextureFilter::Linear,
@@ -8,14 +10,12 @@ static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 	wrap_mode: egui::TextureWrapMode::ClampToEdge,
 };
 
-pub type PixelCoord = [usize; 2];
-
 fn size_to_rect(size: PixelCoord) -> Rect {
 	Rect::from_two_pos(Pos2::ZERO, Pos2::new(size[0] as f32, size[1] as f32))
 }
 
-fn pixel_from_coord(coord: PixelCoord, img: &ColorImage) -> Color32 {
-	img.pixels[coord[0] + coord[1] * img.width()]
+fn pixel_from_coord(coord: PixelCoord, img: &ColorImage) -> Option<Color32> {
+	img.pixels.get(coord[0] + coord[1] * img.width()).cloned()
 }
 
 pub fn coord_to_idx(coord: PixelCoord, img: &ColorImage) -> usize {
@@ -69,11 +69,11 @@ struct PixelEdit {
 }
 
 impl PixelEdit {
-	fn new(data: &ColorImage, coord: PixelCoord) -> Self {
-		PixelEdit {
-			oldcol: pixel_from_coord(coord, data),
+	fn new(data: &ColorImage, coord: PixelCoord) -> Option<Self> {
+		Some(PixelEdit {
+			oldcol: pixel_from_coord(coord, data)?,
 			coord
-		}
+		})
 	}
 }
 
@@ -139,6 +139,8 @@ impl TextureImage {
 	/// Sets a portion of the image and updates the texture handle
 	///
 	/// Does not modify the history in any way
+	///
+	/// TODO: This crashes if it can't fit the entire image in the destination
 	fn set_block(&mut self, block: &BlockEdit) {
 		for src_y in 0..block.old.height() {
 			let dest_y = block.coord[1] + src_y;
@@ -146,11 +148,12 @@ impl TextureImage {
 				let dest_x = block.coord[0] + src_x;
 				let src_idx = coord_to_idx([src_x, src_y], &block.old);
 				let dest_idx = coord_to_idx([dest_x, dest_y], &self.data);
-				self.data.pixels[dest_idx] = block.old.pixels[src_idx];
+				if let Some(pixel) = self.data.pixels.get_mut(dest_idx) {
+					*pixel = block.old.pixels[src_idx];
+				}
 			}
 		}
 
-		// TODO: This crashes if it can't fit the entire image in the destination
 		self.handle.set_partial(block.coord, self.data.region_by_pixels(block.coord, block.old.size), TEX_OPTS);
 	}
 
@@ -165,7 +168,8 @@ impl TextureImage {
 				println!("Undoing pixel edits");
 				let mut redo: Vec<PixelEdit> = vec![];
 				for edit in edits.iter().rev() {
-					redo.push(PixelEdit::new(&self.data, edit.coord));
+					// We can unwrap here since these changes have already been done and so should be totally fine
+					redo.push(PixelEdit::new(&self.data, edit.coord).unwrap());
 					self.set_edit(edit);
 				}
 				self.redos.push(Edit::Pixels(redo));
@@ -189,7 +193,9 @@ impl TextureImage {
 				println!("Redoing pixel edits");
 				let mut changes = vec![];
 				for edit in edits {
-					changes.push(PixelEdit::new(&self.data, edit.coord)); // add this edit to the current ongoing "Undo" edit
+					if let Some(change) = PixelEdit::new(&self.data, edit.coord) {
+						changes.push(change); // add this edit to the current ongoing "Undo" edit
+					}
 					self.set_edit(&edit);
 				}
 				self.history.push(Edit::Pixels(changes));
@@ -227,7 +233,8 @@ impl TextureImage {
 		// There's definitely a better way to do this
 		if let Some(Edit::Pixels(edits)) = self.history.last_mut() {
 			self.redos.clear();
-			edits.push(PixelEdit::new(&self.data, coord)); // add this edit to the current ongoing "Undo" edit
+			// We can unwrap here since we already did bounds checking on the top
+			edits.push(PixelEdit::new(&self.data, coord).unwrap()); // add this edit to the current ongoing "Undo" edit
 			self.set_edit(&PixelEdit{
 				oldcol: color,
 				coord,
