@@ -25,6 +25,11 @@ Planned features:
 - ~~layer reordering~~
 - ~~layer renaming~~
 - layer blend modes
+	- normal (overwrite)
+	- add
+	- subtract
+	- multiply
+	- xor
 - ~~layer opacity~~
 - keyboard shortcuts
 - ~~adding images over the current canvas~~
@@ -41,3 +46,4 @@ Planned features:
 - canvas resize
 - canvas expand/shrink
 - ~~undo/redo~~
+- ~~rectangle fill~~

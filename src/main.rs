@@ -65,6 +65,7 @@ struct ImageCreator {
 enum Tool {
 	Eyedropper,
 	Pencil,
+	Rect,
 	Select,
 	Paste,
 }
@@ -72,7 +73,7 @@ enum Tool {
 struct MyApp {
 	creating_img: Option<ImageCreator>, // If we currently have the create new image dialog up
 	save_after_release: bool, // Whether to save the undo state after each pixel or only when you stop clicking
-	color: Color32, // RGB 0-255
+	color: Color32,
 	secondary: Color32,
 	scene_rect: Rect,
 	interacting: bool,
@@ -252,6 +253,7 @@ impl MyApp {
 	fn tool_panel(&mut self, ui: &mut Ui) {
 		egui::Panel::left(ui.next_auto_id()).show_inside(ui, |ui| {
 			ui.selectable_value(&mut self.tool, Tool::Pencil, "Pencil");
+			ui.selectable_value(&mut self.tool, Tool::Rect, "Rect");
 			ui.selectable_value(&mut self.tool, Tool::Select, "Select");
 			ui.selectable_value(&mut self.tool, Tool::Eyedropper, "Eyedropper");
 			ui.add_enabled_ui(self.clipboard.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::Paste, "Paste"));
@@ -310,6 +312,11 @@ impl MyApp {
 			self.last_coord = None;
 			self.interacting = false;
 
+			if self.tool == Tool::Rect && let Some(rect) = self.selection.take() {
+				// TODO: Check if we dragged with the left or right
+				img.paste(rect.min(), &ColorImage::filled(rect.size(), self.color));
+			}
+
 			if self.save_after_release {
 				img.save_state();
 			}
@@ -322,6 +329,16 @@ impl MyApp {
 			match self.tool {
 				Tool::Pencil => {
 					self.draw(coords, primary_down);
+				},
+				Tool::Rect => {
+					if self.interacting && let Some(rect) = &mut self.selection {
+						rect.b = coords;
+					} else {
+						self.selection = Some(PixRect{
+							a: coords,
+							b: coords
+						});
+					}
 				},
 				Tool::Eyedropper => {
 					if primary_down {
