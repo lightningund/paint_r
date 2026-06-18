@@ -1,3 +1,4 @@
+use std::path::Path;
 use eframe::egui;
 use egui::{Ui, ColorImage, Color32};
 
@@ -103,5 +104,22 @@ impl LayerManager {
 			img_pos.max = layer.image.size.max;
 			ui.put(img_pos, egui::Image::new(&layer.image.handle));
 		}
+	}
+
+	pub fn save(&self, path: &Path) -> Result<(), image::ImageError> {
+		let buf = image::ImageBuffer::<image::Rgba<u8>, _>::from_fn(
+			self.size[0] as u32,
+			self.size[1] as u32,
+			|x, y| -> image::Rgba<u8> {
+				let mut pixel = Color32::TRANSPARENT;
+				let idx = (x as usize) + (y as usize) * self.size[0];
+				for l in &self.layers {
+					pixel = pixel.blend(l.image.data.pixels[idx]);
+				}
+				image::Rgba(pixel.to_array())
+			}
+		);
+
+		buf.save(path)
 	}
 }

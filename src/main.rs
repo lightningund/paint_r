@@ -1,7 +1,8 @@
 mod textureimage;
 mod layermanager;
 
-use std::path::{Path};
+use std::ops::Deref;
+use std::path::{Path, PathBuf};
 use eframe::egui;
 use egui::{Color32, Button, Ui, ColorImage, Rect};
 use image::{ImageReader};
@@ -136,6 +137,7 @@ struct MyApp {
 	selection: Option<PixRect>,
 	clipboard: Option<ColorImage>,
 	cursor_pos: Option<PixelCoord>,
+	path: Option<PathBuf>,
 }
 
 impl Default for MyApp {
@@ -153,6 +155,7 @@ impl Default for MyApp {
 			selection: Default::default(),
 			clipboard: Default::default(),
 			cursor_pos: Default::default(),
+			path: Default::default(),
 		}
 	}
 }
@@ -172,6 +175,10 @@ impl eframe::App for MyApp {
 
 				if ui.add_enabled(!self.layers.is_empty(), Button::new("Save")).clicked() {
 					self.save_img();
+				}
+
+				if ui.add_enabled(!self.layers.is_empty(), Button::new("Save As")).clicked() {
+					self.save_as();
 				}
 
 				ui.color_edit_button_srgba(&mut self.color);
@@ -430,24 +437,21 @@ impl MyApp {
 
 	fn save_img(&self) {
 		// TODO: FIGURE OUT HOW TO SAVE MULTIPLE LAYERS
-		// if let Some(img) = &self.img && let Some(path) = rfd::FileDialog::new()
-		// 	.set_directory(img.path.parent().map(|p| p.to_path_buf()).unwrap_or(Default::default()))
-		// 	.set_file_name(img.path.file_name().and_then(|f| f.to_str()).unwrap_or("image.png"))
-		// 	.save_file() {
-		// 	let buf_opt = image::ImageBuffer::<image::Rgba<u8>, _>::from_vec(
-		// 		img.data.width() as u32,
-		// 		img.data.height() as u32,
-		// 		img.data.pixels.iter().flat_map(|col| col.to_array()).collect()
-		// 	);
-		// 	if let Some(buf) = buf_opt {
-		// 		let res = buf.save(path);
-		// 		if let Err(err) = res {
-		// 			println!("Saving didn't work :( {}", err);
-		// 		}
-		// 	} else {
-		// 		println!("Making the buffer didn't work :(");
-		// 	}
-		// }
+		if !self.layers.is_empty() {
+			if let Some(path) = &self.path {
+				self.layers.save(path);
+			} else {
+				self.save_as();
+			}
+		}
+	}
+
+	fn save_as(&self) {
+		let exts: Vec<&str> = image::ImageFormat::all().flat_map(|fmt| fmt.extensions_str()).map(Deref::deref).collect();
+		let dialog = rfd::FileDialog::new().set_file_name("image.png").add_filter("Images", &exts);
+		if let Some(path) = dialog.save_file() {
+			self.layers.save(&path);
+		}
 	}
 
 	fn assign_img(&mut self, ctx: &egui::Context, data: ColorImage, path: &Path) {
@@ -455,6 +459,8 @@ impl MyApp {
 
 		// force a zoom reset
 		self.scene_rect = Rect::NAN;
+
+		self.path = Some(path.to_path_buf());
 	}
 }
 
