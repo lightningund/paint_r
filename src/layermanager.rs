@@ -193,7 +193,6 @@ impl LayerManager {
 			});
 
 			// The layer was dropped, but not on an item
-			// BUG: This also happens if the user drops *between* items
 			if dropped_payload.is_some() {
 				from = dropped_payload;
 				to = Some(0); // Inset last
@@ -202,12 +201,25 @@ impl LayerManager {
 			if let (Some(from), Some(mut to)) = (from, to) {
 				let from = *from;
 
-				println!("From: {}, To: {}", from, to);
+				println!("Src: {}, Dest: {}, Sel: {}", from, to, self.curr_layer);
 
 				// Adjust row index if we are re-ordering:
 				if to > from { to -= 1; }
 
-				println!("(Adjusted) From: {}, To: {}", from, to);
+				// Adjust the current selection
+				let sel = self.curr_layer;
+				self.curr_layer =
+					if sel == from {
+						to
+					} else if from > sel && to <= sel {
+						sel + 1
+					} else if from < sel && to >= sel {
+						sel - 1
+					} else {
+						sel
+					};
+
+				println!("(Adjusted) Src: {}, Dest: {}, Sel: {}", from, to, self.curr_layer);
 
 				let item = self.layers.remove(from);
 
