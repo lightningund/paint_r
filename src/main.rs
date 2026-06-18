@@ -1,6 +1,7 @@
 mod textureimage;
 mod layermanager;
 mod bresenham;
+mod edit;
 
 use std::ops::Deref;
 use std::path::{Path, PathBuf};

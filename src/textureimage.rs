@@ -1,7 +1,11 @@
+/// An image that owns an array in memory of the pixel data, as well as a texture handle
+///
+/// Currently also stores edit history, but this may change
+
 use eframe::egui;
 use egui::{Color32, TextureHandle, ColorImage, Rect, Pos2};
 
-pub type PixelCoord = [usize; 2];
+use crate::edit::*;
 
 static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 	magnification: egui::TextureFilter::Nearest,
@@ -9,6 +13,8 @@ static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 	mipmap_mode: None,
 	wrap_mode: egui::TextureWrapMode::ClampToEdge,
 };
+
+pub type PixelCoord = [usize; 2];
 
 fn size_to_rect(size: PixelCoord) -> Rect {
 	Rect::from_two_pos(Pos2::ZERO, Pos2::new(size[0] as f32, size[1] as f32))
@@ -60,41 +66,6 @@ impl PixRect {
 			self.a[1].max(self.b[1])
 		]
 	}
-}
-
-#[derive(Default, Debug, Clone, Copy)]
-struct PixelEdit {
-	oldcol: Color32,
-	coord: PixelCoord,
-}
-
-impl PixelEdit {
-	fn new(data: &ColorImage, coord: PixelCoord) -> Option<Self> {
-		Some(PixelEdit {
-			oldcol: pixel_from_coord(coord, data)?,
-			coord
-		})
-	}
-}
-
-#[derive(Default, Debug, Clone)]
-struct BlockEdit {
-	old: ColorImage,
-	coord: PixelCoord,
-}
-
-impl BlockEdit {
-	fn new(target: &ColorImage, data: &ColorImage, coord: PixelCoord) -> Self {
-		BlockEdit {
-			old: target.region_by_pixels(coord, data.size),
-			coord
-		}
-	}
-}
-
-enum Edit {
-	Pixels(Vec<PixelEdit>),
-	Block(BlockEdit),
 }
 
 pub struct TextureImage {
