@@ -162,7 +162,7 @@ impl LayerManager {
 	}
 
 	pub fn save(&self, path: &Path) -> Result<(), image::ImageError> {
-		let buf = image::ImageBuffer::<image::Rgba<u8>, _>::from_fn(
+		let buf = image::ImageBuffer::<image::Rgba<u8>, _>::from_par_fn(
 			self.size[0] as u32,
 			self.size[1] as u32,
 			|x, y| -> image::Rgba<u8> {
