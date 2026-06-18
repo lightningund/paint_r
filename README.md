@@ -21,7 +21,7 @@ Planned features:
 - checkerboard transparency background
 - ~~layers~~
 - ~~layer enabling~~
-- layer reordering
+- ~~layer reordering~~
 - ~~layer renaming~~
 - layer blend modes
 - ~~layer opacity~~

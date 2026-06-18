@@ -135,8 +135,8 @@ impl LayerManager {
 			}
 
 			// If there is a drop, store the location of the item being dragged, and the destination for the drop.
-			let mut from = None;
-			let mut to = None;
+			let mut src = None;
+			let mut dst = None;
 
 			let frame = egui::Frame::default().inner_margin(4.0);
 
@@ -151,6 +151,7 @@ impl LayerManager {
 						ui.selectable_value(&mut self.curr_layer, idx, format!("{}", layer.settings.name));
 					}).response;
 
+					// Let the horizontal strip detect drags
 					let response = response.interact(egui::Sense::click_and_drag());
 					response.dnd_set_drag_payload(idx);
 					response.context_menu(|ui| {
@@ -185,8 +186,8 @@ impl LayerManager {
 
 						// The user dropped onto this item.
 						if let Some(dragged_payload) = response.dnd_release_payload() {
-							from = Some(dragged_payload);
-							to = Some(insert_row_idx);
+							src = Some(dragged_payload);
+							dst = Some(insert_row_idx);
 						}
 					}
 				}
@@ -194,37 +195,33 @@ impl LayerManager {
 
 			// The layer was dropped, but not on an item
 			if dropped_payload.is_some() {
-				from = dropped_payload;
-				to = Some(0); // Inset last
+				src = dropped_payload;
+				dst = Some(0); // Inset last
 			}
 
-			if let (Some(from), Some(mut to)) = (from, to) {
-				let from = *from;
-
-				println!("Src: {}, Dest: {}, Sel: {}", from, to, self.curr_layer);
+			if let (Some(src), Some(mut dst)) = (src, dst) {
+				let src = *src;
 
 				// Adjust row index if we are re-ordering:
-				if to > from { to -= 1; }
+				if dst > src { dst -= 1; }
 
 				// Adjust the current selection
 				let sel = self.curr_layer;
 				self.curr_layer =
-					if sel == from {
-						to
-					} else if from > sel && to <= sel {
+					if sel == src {
+						dst
+					} else if src > sel && dst <= sel {
 						sel + 1
-					} else if from < sel && to >= sel {
+					} else if src < sel && dst >= sel {
 						sel - 1
 					} else {
 						sel
 					};
 
-				println!("(Adjusted) Src: {}, Dest: {}, Sel: {}", from, to, self.curr_layer);
+				let item = self.layers.remove(src);
 
-				let item = self.layers.remove(from);
-
-				to = to.min(self.layers.len());
-				self.layers.insert(to, item);
+				dst = dst.min(self.layers.len());
+				self.layers.insert(dst, item);
 			}
 		});
 
