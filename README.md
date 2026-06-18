@@ -21,12 +21,13 @@ Planned features:
 - checkerboard transparency background
 - ~~layers~~
 - ~~layer enabling~~
+- ~~layer deleting~~
 - ~~layer reordering~~
 - ~~layer renaming~~
 - layer blend modes
 - ~~layer opacity~~
 - keyboard shortcuts
-- adding images over the current canvas
+- ~~adding images over the current canvas~~
 - ~~selecting~~
 - expanding selection
 - subtracting selection

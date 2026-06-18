@@ -92,7 +92,7 @@ impl LayerManager {
 				.default_pos(ui.clip_rect().center())
 				.open(&mut open);
 
-			// TODO: add settings for blending mode, delete
+			// TODO: add settings for blending mode
 			window.show(ui.ctx(), |ui| {
 				ui.horizontal(|ui| {
 					let name_label = ui.label("Name:");
@@ -127,6 +127,28 @@ impl LayerManager {
 		}
 	}
 
+	/// Deletes a layer and updates the selection
+	///
+	/// TODO: Make this undo-able
+	fn delete_layer(&mut self, idx: usize) -> Layer {
+		if self.curr_layer >= idx {
+			// Make sure we don't go under zero
+			self.curr_layer = self.curr_layer.max(1);
+			self.curr_layer -= 1;
+		}
+		self.layers.remove(idx)
+	}
+
+	/// Inserts a layer and updates the selection
+	///
+	/// TODO: Make this undo-able
+	fn insert_layer(&mut self, idx: usize, layer: Layer) {
+		if self.curr_layer >= idx {
+			self.curr_layer += 1;
+		}
+		self.layers.insert(idx, layer);
+	}
+
 	pub fn draw_panel(&mut self, ui: &mut Ui) {
 		egui::Panel::right(ui.next_auto_id()).show_inside(ui, |ui| {
 			ui.heading("Layers");
@@ -140,6 +162,7 @@ impl LayerManager {
 
 			let frame = egui::Frame::default().inner_margin(4.0);
 
+			let mut removing_layer = None;
 			let (_, dropped_payload) = ui.dnd_drop_zone::<usize, ()>(frame, |ui| {
 				for (idx, layer) in self.layers.iter_mut().enumerate().rev() {
 					let response = ui.horizontal(|ui| {
@@ -158,6 +181,10 @@ impl LayerManager {
 						if ui.button("Settings").clicked() {
 							self.configuring_layer = Some(idx);
 							self.backup_settings = Some(layer.settings.clone());
+						}
+
+						if ui.button("Delete").clicked() {
+							removing_layer = Some(idx);
 						}
 					});
 
@@ -199,29 +226,29 @@ impl LayerManager {
 			if let (Some(src), Some(mut dst)) = (src, dst) {
 				let src = *src;
 
-				// Adjust row index if we are re-ordering:
+				// Adjust index to account for the one being removed
 				if dst > src { dst -= 1; }
 
-				// Only continue if it actually moved to a new place
+				// Cap it to the length of the array
+				dst = dst.min(self.layers.len());
+
+				// Only continue if something actually moved to a new place
 				if dst != src {
-					// Adjust the current selection
+					// Save to compare to later
 					let sel = self.curr_layer;
-					self.curr_layer =
-						if sel == src {
-							dst
-						} else if src > sel && dst <= sel {
-							sel + 1
-						} else if src < sel && dst >= sel {
-							sel - 1
-						} else {
-							sel
-						};
 
-					let item = self.layers.remove(src);
+					let layer = self.delete_layer(src);
+					self.insert_layer(dst, layer);
 
-					dst = dst.min(self.layers.len());
-					self.layers.insert(dst, item);
+					// If the layer we moved was the selected one, then the normal selection update logic doesn't apply
+					if sel == src {
+						self.curr_layer = dst;
+					}
 				}
+			}
+
+			if let Some(idx) = removing_layer {
+				self.delete_layer(idx);
 			}
 		});
 
