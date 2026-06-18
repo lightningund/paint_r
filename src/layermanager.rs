@@ -134,17 +134,83 @@ impl LayerManager {
 				self.add_empty_layer(ui.ctx());
 			}
 
-			for (idx, layer) in self.layers.iter_mut().enumerate().rev() {
-				ui.horizontal(|ui| {
-					ui.checkbox(&mut layer.enabled, "");
+			// for (idx, layer) in self.layers.iter_mut().enumerate().rev() {
+			// 	self.layer_label(idx, ui);
+			// }
 
-					ui.selectable_value(&mut self.curr_layer, idx, format!("{}", layer.settings.name)).context_menu(|ui| {
-						if ui.button("Settings").clicked() {
-							self.configuring_layer = Some(idx);
-							self.backup_settings = Some(layer.settings.clone());
+			// If there is a drop, store the location of the item being dragged, and the destination for the drop.
+			let mut from = None;
+			let mut to = None;
+
+			let frame = egui::Frame::default().inner_margin(4.0);
+
+			let (_, dropped_payload) = ui.dnd_drop_zone::<usize, ()>(frame, |ui| {
+				for (idx, layer) in self.layers.iter_mut().enumerate().rev() {
+					let response = ui.horizontal(|ui| {
+						ui.checkbox(&mut layer.enabled, "");
+
+						let item_id = egui::Id::new(("my_drag_and_drop_demo", idx));
+						let response = ui.dnd_drag_source(item_id, idx, |ui| {
+							ui.label("Drag Me!");
+						}).response;
+
+						ui.selectable_value(&mut self.curr_layer, idx, format!("{}", layer.settings.name)).context_menu(|ui| {
+							if ui.button("Settings").clicked() {
+								self.configuring_layer = Some(idx);
+								self.backup_settings = Some(layer.settings.clone());
+							}
+						});
+
+						response
+					}).response;
+
+					// Detect drops onto this item:
+					if let (Some(pointer), Some(held_idx)) = (
+						ui.input(|i| i.pointer.interact_pos()),
+						response.dnd_hover_payload::<usize>(),
+					) {
+						let rect = response.rect;
+
+						// Preview insertion:
+						let stroke = egui::Stroke::new(1.0, Color32::WHITE);
+						let (insert_row_idx, y) =
+							if *held_idx == idx {
+								// We are dragged onto ourselves
+								(idx, rect.center().y)
+							} else if pointer.y < rect.center().y {
+								// Above us
+								(idx, rect.top())
+							} else {
+								// Below us
+								(idx + 1, rect.bottom())
+							};
+
+						ui.painter().hline(rect.x_range(), y, stroke);
+
+						// The user dropped onto this item.
+						if let Some(dragged_payload) = response.dnd_release_payload() {
+							from = Some(dragged_payload);
+							to = Some(insert_row_idx);
 						}
-					});
-				});
+					}
+				}
+			});
+
+			if let Some(dragged_payload) = dropped_payload {
+				// The user dropped onto the column, but not on any one item.
+				from = Some(dragged_payload);
+				to = Some(usize::MAX); // Inset last
+			}
+
+			if let (Some(from), Some(mut to)) = (from, to) {
+				let from = *from;
+				// Adjust row index if we are re-ordering:
+				to -= (from > to) as usize;
+
+				let item = self.layers.remove(from);
+
+				to = to.min(self.layers.len());
+				self.layers.insert(to, item);
 			}
 		});
 
