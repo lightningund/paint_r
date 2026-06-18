@@ -162,26 +162,23 @@ impl LayerManager {
 					});
 
 					// Detect drops onto this item
-					if let (Some(pointer), Some(held_idx)) = (
+					if let (Some(pointer), Some(_)) = (
 						ui.input(|i| i.pointer.interact_pos()),
 						response.dnd_hover_payload::<usize>(),
 					) {
 						let rect = response.rect;
 
 						// Preview insertion:
-						let stroke = egui::Stroke::new(1.0, Color32::WHITE);
 						let (insert_row_idx, y) =
-							if *held_idx == idx {
-								// We are dragged onto ourselves
-								(idx, rect.center().y)
-							} else if pointer.y < rect.center().y {
+							if pointer.y < rect.center().y {
 								// Above us
-								(idx + 1, rect.top())
+								(idx + 1, rect.top() - 1.5)
 							} else {
 								// Below us
-								(idx, rect.bottom())
+								(idx, rect.bottom() + 1.5)
 							};
 
+						let stroke = egui::Stroke::new(1.0, Color32::WHITE);
 						ui.painter().hline(rect.x_range(), y, stroke);
 
 						// The user dropped onto this item.
@@ -205,23 +202,26 @@ impl LayerManager {
 				// Adjust row index if we are re-ordering:
 				if dst > src { dst -= 1; }
 
-				// Adjust the current selection
-				let sel = self.curr_layer;
-				self.curr_layer =
-					if sel == src {
-						dst
-					} else if src > sel && dst <= sel {
-						sel + 1
-					} else if src < sel && dst >= sel {
-						sel - 1
-					} else {
-						sel
-					};
+				// Only continue if it actually moved to a new place
+				if dst != src {
+					// Adjust the current selection
+					let sel = self.curr_layer;
+					self.curr_layer =
+						if sel == src {
+							dst
+						} else if src > sel && dst <= sel {
+							sel + 1
+						} else if src < sel && dst >= sel {
+							sel - 1
+						} else {
+							sel
+						};
 
-				let item = self.layers.remove(src);
+					let item = self.layers.remove(src);
 
-				dst = dst.min(self.layers.len());
-				self.layers.insert(dst, item);
+					dst = dst.min(self.layers.len());
+					self.layers.insert(dst, item);
+				}
 			}
 		});
 
