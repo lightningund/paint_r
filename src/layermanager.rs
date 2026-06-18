@@ -145,16 +145,14 @@ impl LayerManager {
 					let response = ui.horizontal(|ui| {
 						ui.checkbox(&mut layer.enabled, "");
 
-						let item_id = egui::Id::new(("my_drag_and_drop_demo", idx));
-						ui.dnd_drag_source(item_id, idx, |ui| {
-							ui.label("Drag Me!");
-						});
-						ui.label("Drag Me!");
+						// Add a label that can't be interacted with, basically just a drag surface
+						ui.add(egui::Label::new("Drag Me!").sense(egui::Sense::empty()).selectable(false));
 
 						ui.selectable_value(&mut self.curr_layer, idx, format!("{}", layer.settings.name));
 					}).response;
 
-					// response.dnd_set_drag_payload(idx);
+					let response = response.interact(egui::Sense::click_and_drag());
+					response.dnd_set_drag_payload(idx);
 					response.context_menu(|ui| {
 						if ui.button("Settings").clicked() {
 							self.configuring_layer = Some(idx);
