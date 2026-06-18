@@ -380,7 +380,8 @@ impl MyApp {
 		}
 	}
 
-	fn save_img(&self) {
+	// Marked mut because it might call save_as which sets the stored path
+	fn save_img(&mut self) {
 		// TODO: FIGURE OUT HOW TO SAVE MULTIPLE LAYERS
 		if !self.layers.is_empty() {
 			if let Some(path) = &self.path {
@@ -391,11 +392,14 @@ impl MyApp {
 		}
 	}
 
-	fn save_as(&self) {
+	// Marked mut because it sets the stored path
+	fn save_as(&mut self) {
 		let exts: Vec<&str> = image::ImageFormat::all().flat_map(|fmt| fmt.extensions_str()).map(Deref::deref).collect();
 		let dialog = rfd::FileDialog::new().set_file_name("image.png").add_filter("Images", &exts);
 		if let Some(path) = dialog.save_file() {
 			self.layers.save(&path);
+
+			self.path = Some(path);
 		}
 	}
 

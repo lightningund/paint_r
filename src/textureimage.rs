@@ -20,10 +20,6 @@ fn size_to_rect(size: PixelCoord) -> Rect {
 	Rect::from_two_pos(Pos2::ZERO, Pos2::new(size[0] as f32, size[1] as f32))
 }
 
-fn pixel_from_coord(coord: PixelCoord, img: &ColorImage) -> Option<Color32> {
-	img.pixels.get(coord[0] + coord[1] * img.width()).cloned()
-}
-
 pub fn coord_to_idx(coord: PixelCoord, img: &ColorImage) -> usize {
 	coord[0] + coord[1] * img.width()
 }

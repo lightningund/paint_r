@@ -7,10 +7,6 @@ fn pixel_from_coord(coord: PixelCoord, img: &ColorImage) -> Option<Color32> {
 	img.pixels.get(coord[0] + coord[1] * img.width()).cloned()
 }
 
-pub fn coord_to_idx(coord: PixelCoord, img: &ColorImage) -> usize {
-	coord[0] + coord[1] * img.width()
-}
-
 #[derive(Default, Debug, Clone, Copy)]
 pub struct PixelEdit {
 	pub oldcol: Color32,
