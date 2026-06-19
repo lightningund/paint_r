@@ -1,3 +1,4 @@
+mod types;
 mod textureimage;
 mod layermanager;
 mod bresenham;
@@ -11,6 +12,7 @@ use image::{ImageReader};
 
 use crate::textureimage::*;
 use crate::layermanager::*;
+use crate::types::*;
 
 use egui::PointerButton::Primary as PRIMARY_CLICK;
 use egui::PointerButton::Secondary as SECONDARY_CLICK;

@@ -3,6 +3,7 @@ use eframe::egui;
 use egui::{Ui, ColorImage, Color32};
 
 use crate::textureimage::*;
+use crate::types::PixelCoord;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct DimensionError {

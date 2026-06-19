@@ -3,8 +3,9 @@
 /// Currently also stores edit history, but this may change
 
 use eframe::egui;
-use egui::{Color32, TextureHandle, ColorImage, Rect, Pos2};
+use egui::{Color32, TextureHandle, ColorImage, Rect};
 
+use crate::types::*;
 use crate::edit::*;
 
 static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
@@ -13,65 +14,6 @@ static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 	mipmap_mode: None,
 	wrap_mode: egui::TextureWrapMode::ClampToEdge,
 };
-
-pub type PixelCoord = [usize; 2];
-
-fn size_to_rect(size: PixelCoord) -> Rect {
-	Rect::from_two_pos(Pos2::ZERO, Pos2::new(size[0] as f32, size[1] as f32))
-}
-
-pub fn coord_to_idx(coord: PixelCoord, img: &ColorImage) -> usize {
-	coord[0] + coord[1] * img.width()
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PixRect {
-	pub a: PixelCoord,
-	pub b: PixelCoord,
-}
-
-impl From<PixRect> for Rect {
-	fn from(value: PixRect) -> Self {
-		let min = value.min();
-		let max = value.max();
-		Rect{
-			min: egui::Pos2::new(min[0] as f32, min[1] as f32),
-			max: egui::Pos2::new(max[0] as f32, max[1] as f32),
-		}
-	}
-}
-
-// TODO: This feels like probably bad practice?
-impl From<&PixRect> for Rect {
-	fn from(value: &PixRect) -> Self {
-		value.clone().into()
-	}
-}
-
-impl PixRect {
-	pub fn min(&self) -> PixelCoord {
-		[
-			self.a[0].min(self.b[0]),
-			self.a[1].min(self.b[1])
-		]
-	}
-
-	pub fn max(&self) -> PixelCoord {
-		[
-			self.a[0].max(self.b[0]),
-			self.a[1].max(self.b[1])
-		]
-	}
-
-	pub fn size(&self) -> PixelCoord {
-		let mi = self.min();
-		let ma = self.max();
-		[
-			ma[0] - mi[0],
-			ma[1] - mi[1]
-		]
-	}
-}
 
 pub struct TextureImage {
 	pub saved: bool,
@@ -130,7 +72,9 @@ impl TextureImage {
 			}
 		}
 
-		self.handle.set_partial(block.coord, self.data.region_by_pixels(block.coord, block.old.size), TEX_OPTS);
+		let block_end = [block.coord[0] + block.old.size[0], block.coord[1] + block.old.size[1]];
+		println!("Theoretical end: {:?}, Max Size: {:?}, Calc max: {:?}", block_end, self.data.size, coord_min(block_end, self.data.size));
+		self.handle.set_partial(block.coord, self.data.region_by_pixels(block.coord, coord_min(block_end, self.data.size)), TEX_OPTS);
 	}
 
 	/// Undoes the last edit and pushes it to the redo history

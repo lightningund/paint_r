@@ -1,7 +1,7 @@
 use eframe::egui;
 use egui::{Color32, ColorImage};
 
-pub type PixelCoord = [usize; 2];
+use crate::types::*;
 
 fn pixel_from_coord(coord: PixelCoord, img: &ColorImage) -> Option<Color32> {
 	img.pixels.get(coord[0] + coord[1] * img.width()).cloned()
@@ -28,6 +28,7 @@ pub struct BlockEdit {
 	pub coord: PixelCoord,
 }
 
+// TODO: Add bounds checking
 impl BlockEdit {
 	pub fn new(target: &ColorImage, data: &ColorImage, coord: PixelCoord) -> Self {
 		BlockEdit {
