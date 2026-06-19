@@ -19,6 +19,14 @@ pub fn coord_max(a: PixelCoord, b: PixelCoord) -> PixelCoord {
 	[ a[0].max(b[0]), a[1].max(b[1]) ]
 }
 
+pub fn coord_add(a: PixelCoord, b: PixelCoord) -> PixelCoord {
+	[a[0] + b[0], a[1] + b[1]]
+}
+
+pub fn coord_sub(a: PixelCoord, b: PixelCoord) -> PixelCoord {
+	[a[0] - b[0], a[1] - b[1]]
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PixRect {
 	pub a: PixelCoord,

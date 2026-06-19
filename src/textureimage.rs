@@ -57,8 +57,6 @@ impl TextureImage {
 	/// Sets a portion of the image and updates the texture handle
 	///
 	/// Does not modify the history in any way
-	///
-	/// TODO: This crashes if it can't fit the entire image in the destination
 	fn set_block(&mut self, block: &BlockEdit) {
 		for src_y in 0..block.old.height() {
 			let dest_y = block.coord[1] + src_y;
@@ -72,9 +70,11 @@ impl TextureImage {
 			}
 		}
 
-		let block_end = [block.coord[0] + block.old.size[0], block.coord[1] + block.old.size[1]];
-		println!("Theoretical end: {:?}, Max Size: {:?}, Calc max: {:?}", block_end, self.data.size, coord_min(block_end, self.data.size));
-		self.handle.set_partial(block.coord, self.data.region_by_pixels(block.coord, coord_min(block_end, self.data.size)), TEX_OPTS);
+		let block_end = coord_add(block.coord, block.old.size);
+		let max_end = coord_min(block_end, self.data.size);
+		let real_size = coord_sub(max_end, block.coord);
+		println!("Theoretical end: {:?}, Max Size: {:?}, Calc max: {:?}", block_end, self.data.size, real_size);
+		self.handle.set_partial(block.coord, self.data.region_by_pixels(block.coord, real_size), TEX_OPTS);
 	}
 
 	/// Undoes the last edit and pushes it to the redo history

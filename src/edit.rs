@@ -28,11 +28,13 @@ pub struct BlockEdit {
 	pub coord: PixelCoord,
 }
 
-// TODO: Add bounds checking
 impl BlockEdit {
 	pub fn new(target: &ColorImage, data: &ColorImage, coord: PixelCoord) -> Self {
+		let block_end = coord_add(coord, data.size);
+		let max_end = coord_min(block_end, target.size);
+		let real_size = coord_sub(max_end, coord);
 		BlockEdit {
-			old: target.region_by_pixels(coord, data.size),
+			old: target.region_by_pixels(coord, real_size),
 			coord
 		}
 	}
