@@ -20,12 +20,16 @@ use egui::PointerButton::Secondary as SECONDARY_CLICK;
 fn main() -> eframe::Result {
 	let args: Vec<String> = std::env::args().collect();
 
+	let icon = eframe::icon_data::from_png_bytes(include_bytes!("../icon.png")).expect("Couldn't Load Icon");
+
 	let options = eframe::NativeOptions {
 		viewport: egui::ViewportBuilder::default()
+			.with_icon(std::sync::Arc::new(icon))
 			.with_inner_size([500.0, 500.0])
 			.with_drag_and_drop(true),
 		..Default::default()
 	};
+
 	eframe::run_native(
 		"My egui App",
 		options,
@@ -303,13 +307,6 @@ impl MyApp {
 		let img = &mut self.layers.get_active_mut()?.image;
 		let pos = response.hover_pos()?;
 
-		if pos.x < 0.0 || pos.y < 0.0 { return None; }
-		if pos.x >= img.size.max.x || pos.y >= img.size.max.y { return None; }
-
-		// Cast it to PixelCoord
-		let coords = [pos.x as usize, pos.y as usize];
-		self.cursor_pos = Some(coords);
-
 		if response.drag_stopped() {
 			self.last_coord = None;
 			self.interacting = false;
@@ -323,6 +320,13 @@ impl MyApp {
 				img.save_state();
 			}
 		}
+
+		if pos.x < 0.0 || pos.y < 0.0 { return None; }
+		if pos.x >= img.size.max.x || pos.y >= img.size.max.y { return None; }
+
+		// Cast it to PixelCoord
+		let coords = [pos.x as usize, pos.y as usize];
+		self.cursor_pos = Some(coords);
 
 		let idx = coord_to_idx(coords, &img.data);
 		let primary_down = response.dragged_by(PRIMARY_CLICK);
@@ -401,7 +405,6 @@ impl MyApp {
 
 	// Marked mut because it might call save_as which sets the stored path
 	fn save_img(&mut self) {
-		// TODO: FIGURE OUT HOW TO SAVE MULTIPLE LAYERS
 		if !self.layers.is_empty() {
 			if let Some(path) = &self.path {
 				self.layers.save(path);
@@ -414,6 +417,7 @@ impl MyApp {
 	// Marked mut because it sets the stored path
 	fn save_as(&mut self) {
 		let exts: Vec<&str> = image::ImageFormat::all().flat_map(|fmt| fmt.extensions_str()).map(Deref::deref).collect();
+		// TODO: Make this start where the current path is if there is one
 		let dialog = rfd::FileDialog::new().set_file_name("image.png").add_filter("Images", &exts);
 		if let Some(path) = dialog.save_file() {
 			self.layers.save(&path);
