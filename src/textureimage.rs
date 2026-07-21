@@ -53,53 +53,16 @@ impl TextureImage {
 		self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
 	}
 
-	/// Sets a portion of the image and updates the texture handle
-	///
-	/// Does not modify the history in any way
-	fn set_block(&mut self, block: &BlockEdit) {
-		for src_y in 0..block.old.height() {
-			let dest_y = block.coord[1] + src_y;
-			for src_x in 0..block.old.width() {
-				let dest_x = block.coord[0] + src_x;
-				let src_idx = coord_to_idx([src_x, src_y], &block.old);
-				let dest_idx = coord_to_idx([dest_x, dest_y], &self.data);
-				if let Some(pixel) = self.data.pixels.get_mut(dest_idx) {
-					*pixel = block.old.pixels[src_idx];
-				}
-			}
-		}
-
-		let block_end = coord_add(block.coord, block.old.size);
-		let max_end = coord_min(block_end, self.data.size);
-		let real_size = coord_sub(max_end, block.coord);
-		println!("Theoretical end: {:?}, Max Size: {:?}, Calc max: {:?}", block_end, self.data.size, real_size);
-		self.handle.set_partial(block.coord, self.data.region_by_pixels(block.coord, real_size), TEX_OPTS);
-	}
-
 	/// Undoes the last edit and pushes it to the redo history
 	///
 	/// Does nothing if there is no history
 	///
 	/// It is undefined behaviour to call this if edits have been made since the last time `save_state` was called
 	pub fn undo(&mut self) {
-		match self.history.pop() {
-			Some(Edit::Pixels(edits)) => {
-				println!("Undoing pixel edits");
-				let mut redo: Vec<PixelEdit> = vec![];
-				for edit in edits.iter().rev() {
-					// We can unwrap here since these changes have already been done and so should be totally fine
-					redo.push(PixelEdit::new(&self.data, edit.coord).unwrap());
-					self.set_edit(edit);
-				}
-				self.redos.push(Edit::Pixels(redo));
-			},
-			Some(Edit::Block(block)) => {
-				println!("Undoing block edits");
-				let redo = BlockEdit::new(&self.data, &block.old, block.coord);
-				self.redos.push(Edit::Block(redo));
-				self.set_block(&block);
-			},
-			None => {}
+		if let Some(edit) = self.history.pop() {
+			let (redo, area) = edit.apply(&mut self.data);
+			self.handle.set_partial(area.min(), self.data.region_by_pixels(area.min(), area.size()), TEX_OPTS);
+			self.redos.push(redo);
 		}
 	}
 
@@ -107,25 +70,10 @@ impl TextureImage {
 	///
 	/// Does nothing if there is no redo history
 	pub fn redo(&mut self) {
-		match self.redos.pop() {
-			Some(Edit::Pixels(edits)) => {
-				println!("Redoing pixel edits");
-				let mut changes = vec![];
-				for edit in edits {
-					if let Some(change) = PixelEdit::new(&self.data, edit.coord) {
-						changes.push(change); // add this edit to the current ongoing "Undo" edit
-					}
-					self.set_edit(&edit);
-				}
-				self.history.push(Edit::Pixels(changes));
-			},
-			Some(Edit::Block(block)) => {
-				println!("Redoing block edits");
-				let undo = BlockEdit::new(&self.data, &block.old, block.coord);
-				self.history.push(Edit::Block(undo));
-				self.set_block(&block);
-			},
-			None => {}
+		if let Some(edit) = self.redos.pop() {
+			let (undo, area) = edit.apply(&mut self.data);
+			self.handle.set_partial(area.min(), self.data.region_by_pixels(area.min(), area.size()), TEX_OPTS);
+			self.history.push(undo);
 		}
 
 		self.save_state();
