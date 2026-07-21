@@ -54,7 +54,7 @@ impl BlockEdit {
 		}
 
 		let block_end = coord_add(self.coord, self.old.size);
-		let max_end = coord_min(block_end, target.size);
+		let max_end = coord_min(block_end, coord_sub(target.size, [1, 1]));
 		let real_size = coord_sub(max_end, self.coord);
 		println!("Theoretical end: {:?}, Max Size: {:?}, Calc max: {:?}", block_end, target.size, real_size);
 		let area = PixRect{ a: self.coord, b: max_end };
@@ -82,6 +82,7 @@ fn apply_edit(edits: &Vec<PixelEdit>, target: &mut ColorImage) -> (Vec<PixelEdit
 		area = area.include(edit.coord);
 	}
 
+	println!("{:?}", area);
 	(redo, area)
 }
 

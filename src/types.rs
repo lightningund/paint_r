@@ -57,7 +57,7 @@ impl PixRect {
 	}
 
 	pub fn max(&self) -> PixelCoord {
-		coord_max(self.a, self.b)
+		coord_add(coord_max(self.a, self.b), [1, 1])
 	}
 
 	pub fn size(&self) -> PixelCoord {
