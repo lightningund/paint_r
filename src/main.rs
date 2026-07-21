@@ -120,95 +120,22 @@ impl Default for MyApp {
 impl eframe::App for MyApp {
 	// This is called every time the screen updates
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-		egui::Panel::top(ui.next_auto_id()).show_inside(ui, |ui| {
-			ui.horizontal(|ui| {
-				if ui.button("New").clicked() { self.creating_img = Some(Default::default()); }
-
-				if ui.button("Open").clicked() && let Some(path) = rfd::FileDialog::new().pick_file() {
-					if let Ok(image_data) = load_image_from_path(&path) {
-						self.assign_img(ui.ctx(), image_data, &path);
-					}
-				}
-
-				if ui.add_enabled(!self.layers.is_empty() && self.path.is_some(), Button::new("Save")).clicked() {
-					self.save_img();
-				}
-
-				if ui.add_enabled(!self.layers.is_empty(), Button::new("Save As")).clicked() {
-					self.save_as();
-				}
-
-				ui.color_edit_button_srgba(&mut self.color);
-				ui.label("/");
-				ui.color_edit_button_srgba(&mut self.secondary);
-
-				if let Some(layer) = self.layers.get_active_mut() {
-					let img = &mut layer.image;
-					if ui.add_enabled(img.has_undo(), Button::new("Undo")).clicked() {
-						img.undo();
-					}
-
-					if ui.add_enabled(img.has_redo(), Button::new("Redo")).clicked() {
-						img.redo();
-					}
-
-					if ui.add_enabled(self.selection.is_some(), Button::new("Copy")).clicked() {
-						// We can unwrap here because the only way to click the button is if selection is some
-						self.clipboard = Some(img.copy(self.selection.unwrap()));
-					}
-
-					ui.ctx().input(|i| {
-						for evt in &i.events {
-							use egui::Event::*;
-							match evt {
-								Copy => {
-									if let Some(sel) = self.selection {
-										self.clipboard = Some(img.copy(sel));
-									}
-								},
-								_ => {}
-							}
-						}
-					});
-				}
-
-				ui.checkbox(&mut self.save_after_release, "Save After Release")
-					.on_hover_text("Whether to save the undo state after each pixel or only when you stop clicking");
-
-				ui.checkbox(&mut self.show_grid, "Pixel Grid")
-					.on_hover_text("Whether to show gridlines around the pixels");
-			});
-
-			// Bresenham line algorithm test
-			if ui.button("Test Lines").clicked() {
-				self.assign_img(ui.ctx(), ColorImage::filled([1000, 1000], Color32::WHITE), Path::new(""));
-				let mut quad_test = |dx: bool, dy: bool| {
-					let a = if dx { 500 + 462 } else { 500 - 462 };
-					let b = if dy { 500 + 191 } else { 500 - 191 };
-					self.last_coord = Some([500, 500]);
-					self.draw([a, b], false);
-					self.last_coord = Some([500, 500]);
-					self.draw([b, a], false);
-				};
-
-				quad_test(true, true);
-				quad_test(true, false);
-				quad_test(false, true);
-				quad_test(false, false);
-			}
-		});
-
 		// Show the image creation window if needed
 		self.image_creator_window(ui);
 
-		// Show the info on the bottom
-		self.status_bar(ui);
+		// The main settings
+		egui::Panel::top(ui.next_auto_id()).show_inside(ui, |ui| self.top_bar(ui));
 
-		self.tool_panel(ui);
+		// The status info bar
+		egui::Panel::bottom(ui.next_auto_id()).show_inside(ui, |ui| self.status_bar(ui));
 
-		// Show the layer selection panel
-		self.layers.draw_panel(ui);
+		// The tool selection panel
+		egui::Panel::left(ui.next_auto_id()).show_inside(ui, |ui| self.tool_panel(ui));
 
+		// The layer selection/edit panel
+		egui::Panel::right(ui.next_auto_id()).show_inside(ui, |ui| self.layers.draw_panel(ui));
+
+		// The main canvas
 		egui::CentralPanel::default().show_inside(ui, |ui| self.image_zone(ui));
 	}
 }
@@ -224,6 +151,7 @@ fn set_if_key<T>(ctx: &egui::Context, key: egui::Key, target: &mut T, val: T) {
 
 // UI Elements
 impl MyApp {
+	/// Popup window used for creating images
 	fn image_creator_window(&mut self, ui: &mut Ui) {
 		if let Some(mut creator) = self.creating_img.take() {
 			let mut created = false;
@@ -255,23 +183,99 @@ impl MyApp {
 		}
 	}
 
-	fn status_bar(&self, ui: &mut Ui) {
-		egui::Panel::bottom(ui.next_auto_id()).show_inside(ui, |ui| {
-			if let Some(pos) = self.cursor_pos {
-				ui.label(format!("Pointer Pos: {:?}", pos));
+	/// All of the main settings
+	fn top_bar(&mut self, ui: &mut Ui) {
+		ui.horizontal(|ui| {
+			if ui.button("New").clicked() { self.creating_img = Some(Default::default()); }
+
+			if ui.button("Open").clicked() && let Some(path) = rfd::FileDialog::new().pick_file() {
+				if let Ok(image_data) = load_image_from_path(&path) {
+					self.assign_img(ui.ctx(), image_data, &path);
+				}
 			}
+
+			if ui.add_enabled(!self.layers.is_empty() && self.path.is_some(), Button::new("Save")).clicked() {
+				self.save_img();
+			}
+
+			if ui.add_enabled(!self.layers.is_empty(), Button::new("Save As")).clicked() {
+				self.save_as();
+			}
+
+			ui.color_edit_button_srgba(&mut self.color);
+			ui.label("/");
+			ui.color_edit_button_srgba(&mut self.secondary);
+
+			if let Some(layer) = self.layers.get_active_mut() {
+				let img = &mut layer.image;
+				if ui.add_enabled(img.has_undo(), Button::new("Undo")).clicked() {
+					img.undo();
+				}
+
+				if ui.add_enabled(img.has_redo(), Button::new("Redo")).clicked() {
+					img.redo();
+				}
+
+				if ui.add_enabled(self.selection.is_some(), Button::new("Copy")).clicked() {
+					// We can unwrap here because the only way to click the button is if selection is some
+					self.clipboard = Some(img.copy(self.selection.unwrap()));
+				}
+
+				ui.ctx().input(|i| {
+					for evt in &i.events {
+						use egui::Event::*;
+						match evt {
+							Copy => {
+								if let Some(sel) = self.selection {
+									self.clipboard = Some(img.copy(sel));
+								}
+							},
+							_ => {}
+						}
+					}
+				});
+			}
+
+			ui.checkbox(&mut self.save_after_release, "Save After Release")
+				.on_hover_text("Whether to save the undo state after each pixel or only when you stop clicking");
+
+			ui.checkbox(&mut self.show_grid, "Pixel Grid")
+				.on_hover_text("Whether to show gridlines around the pixels");
 		});
+
+		// Bresenham line algorithm test
+		if ui.button("Test Lines").clicked() {
+			self.assign_img(ui.ctx(), ColorImage::filled([1000, 1000], Color32::WHITE), Path::new(""));
+			let mut quad_test = |dx: bool, dy: bool| {
+				let a = if dx { 500 + 462 } else { 500 - 462 };
+				let b = if dy { 500 + 191 } else { 500 - 191 };
+				self.last_coord = Some([500, 500]);
+				self.draw([a, b], false);
+				self.last_coord = Some([500, 500]);
+				self.draw([b, a], false);
+			};
+
+			quad_test(true, true);
+			quad_test(true, false);
+			quad_test(false, true);
+			quad_test(false, false);
+		}
 	}
 
-	// Tool selection
+	/// Bar displaying some stats
+	fn status_bar(&self, ui: &mut Ui) {
+		if let Some(pos) = self.cursor_pos {
+			ui.label(format!("Pointer Pos: {:?}", pos));
+		}
+	}
+
+	/// Tool selection
 	fn tool_panel(&mut self, ui: &mut Ui) {
-		egui::Panel::left(ui.next_auto_id()).show_inside(ui, |ui| {
-			ui.selectable_value(&mut self.tool, Tool::Pencil, "Pencil");
-			ui.selectable_value(&mut self.tool, Tool::Rect, "Rect");
-			ui.selectable_value(&mut self.tool, Tool::Select, "Select");
-			ui.selectable_value(&mut self.tool, Tool::Eyedropper, "Eyedropper");
-			ui.add_enabled_ui(self.clipboard.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::Paste, "Paste"));
-		});
+		ui.selectable_value(&mut self.tool, Tool::Pencil, "Pencil");
+		ui.selectable_value(&mut self.tool, Tool::Rect, "Rect");
+		ui.selectable_value(&mut self.tool, Tool::Select, "Select");
+		ui.selectable_value(&mut self.tool, Tool::Eyedropper, "Eyedropper");
+		ui.add_enabled_ui(self.clipboard.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::Paste, "Paste"));
 
 		// Also check for shortcuts
 		set_if_key(ui.ctx(), egui::Key::P, &mut self.tool, Tool::Pencil);
@@ -322,7 +326,6 @@ impl MyApp {
 						for y in min_y..max_y {
 							painter.hline(x_range, y as f32, stroke);
 						}
-						// println!("[[{} {}] - [{} {}]]", min_x, min_y, max_x, max_y);
 					}
 				}
 			}

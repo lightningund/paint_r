@@ -99,6 +99,7 @@ impl LayerManager {
 					let name_label = ui.label("Name:");
 					ui.text_edit_singleline(&mut cfg.name).labelled_by(name_label.id);
 				});
+
 				ui.horizontal(|ui| {
 					let opacity_label = ui.label("Opacity:");
 					ui.add(egui::Slider::new(&mut cfg.opacity, 0..=255)).labelled_by(opacity_label.id);
@@ -112,6 +113,7 @@ impl LayerManager {
 								*cfg = backup.clone();
 							}
 						}
+
 						if ui.button("Save").clicked() {
 							self.configuring_layer = None;
 						}
@@ -151,107 +153,105 @@ impl LayerManager {
 	}
 
 	pub fn draw_panel(&mut self, ui: &mut Ui) {
-		egui::Panel::right(ui.next_auto_id()).show_inside(ui, |ui| {
-			ui.heading("Layers");
-			if ui.button("New Layer").clicked() {
-				self.add_empty_layer(ui.ctx());
-			}
+		ui.heading("Layers");
+		if ui.button("New Layer").clicked() {
+			self.add_empty_layer(ui.ctx());
+		}
 
-			// If there is a drop, store the location of the item being dragged, and the destination for the drop.
-			let mut src = None;
-			let mut dst = None;
+		// If there is a drop, store the location of the item being dragged, and the destination for the drop.
+		let mut src = None;
+		let mut dst = None;
 
-			let frame = egui::Frame::default().inner_margin(4.0);
+		let frame = egui::Frame::default().inner_margin(4.0);
 
-			let mut removing_layer = None;
-			let (_, dropped_payload) = ui.dnd_drop_zone::<usize, ()>(frame, |ui| {
-				for (idx, layer) in self.layers.iter_mut().enumerate().rev() {
-					let response = ui.horizontal(|ui| {
-						ui.checkbox(&mut layer.enabled, "");
+		let mut removing_layer = None;
+		let (_, dropped_payload) = ui.dnd_drop_zone::<usize, ()>(frame, |ui| {
+			for (idx, layer) in self.layers.iter_mut().enumerate().rev() {
+				let response = ui.horizontal(|ui| {
+					ui.checkbox(&mut layer.enabled, "");
 
-						// Add a label that can't be interacted with, basically just a drag surface
-						ui.add(egui::Label::new("Drag Me!").sense(egui::Sense::empty()).selectable(false));
+					// Add a label that can't be interacted with, basically just a drag surface
+					ui.add(egui::Label::new("Drag Me!").sense(egui::Sense::empty()).selectable(false));
 
-						ui.selectable_value(&mut self.curr_layer, idx, format!("{}", layer.settings.name));
-					}).response;
+					ui.selectable_value(&mut self.curr_layer, idx, format!("{}", layer.settings.name));
+				}).response;
 
-					// Let the horizontal strip detect drags
-					let response = response.interact(egui::Sense::click_and_drag());
-					response.dnd_set_drag_payload(idx);
-					response.context_menu(|ui| {
-						if ui.button("Settings").clicked() {
-							self.configuring_layer = Some(idx);
-							self.backup_settings = Some(layer.settings.clone());
-						}
+				// Let the horizontal strip detect drags
+				let response = response.interact(egui::Sense::click_and_drag());
+				response.dnd_set_drag_payload(idx);
+				response.context_menu(|ui| {
+					if ui.button("Settings").clicked() {
+						self.configuring_layer = Some(idx);
+						self.backup_settings = Some(layer.settings.clone());
+					}
 
-						if ui.button("Delete").clicked() {
-							removing_layer = Some(idx);
-						}
-					});
+					if ui.button("Delete").clicked() {
+						removing_layer = Some(idx);
+					}
+				});
 
-					// Detect drops onto this item
-					if let (Some(pointer), Some(_)) = (
-						ui.input(|i| i.pointer.interact_pos()),
-						response.dnd_hover_payload::<usize>(),
-					) {
-						let rect = response.rect;
+				// Detect drops onto this item
+				if let (Some(pointer), Some(_)) = (
+					ui.input(|i| i.pointer.interact_pos()),
+					response.dnd_hover_payload::<usize>(),
+				) {
+					let rect = response.rect;
 
-						// Preview insertion:
-						let (insert_row_idx, y) =
-							if pointer.y < rect.center().y {
-								// Above us
-								(idx + 1, rect.top() - 1.5)
-							} else {
-								// Below us
-								(idx, rect.bottom() + 1.5)
-							};
+					// Preview insertion:
+					let (insert_row_idx, y) =
+						if pointer.y < rect.center().y {
+							// Above us
+							(idx + 1, rect.top() - 1.5)
+						} else {
+							// Below us
+							(idx, rect.bottom() + 1.5)
+						};
 
-						let stroke = egui::Stroke::new(1.0, Color32::WHITE);
-						ui.painter().hline(rect.x_range(), y, stroke);
+					let stroke = egui::Stroke::new(1.0, Color32::WHITE);
+					ui.painter().hline(rect.x_range(), y, stroke);
 
-						// The user dropped onto this item.
-						if let Some(dragged_payload) = response.dnd_release_payload() {
-							src = Some(dragged_payload);
-							dst = Some(insert_row_idx);
-						}
+					// The user dropped onto this item.
+					if let Some(dragged_payload) = response.dnd_release_payload() {
+						src = Some(dragged_payload);
+						dst = Some(insert_row_idx);
 					}
 				}
-			});
-
-			// The layer was dropped, but not on an item
-			if dropped_payload.is_some() {
-				src = dropped_payload;
-				dst = Some(0); // Inset last
-			}
-
-			if let (Some(src), Some(mut dst)) = (src, dst) {
-				let src = *src;
-
-				// Adjust index to account for the one being removed
-				if dst > src { dst -= 1; }
-
-				// Cap it to the length of the array
-				dst = dst.min(self.layers.len());
-
-				// Only continue if something actually moved to a new place
-				if dst != src {
-					// Save to compare to later
-					let sel = self.curr_layer;
-
-					let layer = self.delete_layer(src);
-					self.insert_layer(dst, layer);
-
-					// If the layer we moved was the selected one, then the normal selection update logic doesn't apply
-					if sel == src {
-						self.curr_layer = dst;
-					}
-				}
-			}
-
-			if let Some(idx) = removing_layer {
-				self.delete_layer(idx);
 			}
 		});
+
+		// The layer was dropped, but not on an item
+		if dropped_payload.is_some() {
+			src = dropped_payload;
+			dst = Some(0); // Inset last
+		}
+
+		if let (Some(src), Some(mut dst)) = (src, dst) {
+			let src = *src;
+
+			// Adjust index to account for the one being removed
+			if dst > src { dst -= 1; }
+
+			// Cap it to the length of the array
+			dst = dst.min(self.layers.len());
+
+			// Only continue if something actually moved to a new place
+			if dst != src {
+				// Save to compare to later
+				let sel = self.curr_layer;
+
+				let layer = self.delete_layer(src);
+				self.insert_layer(dst, layer);
+
+				// If the layer we moved was the selected one, then the normal selection update logic doesn't apply
+				if sel == src {
+					self.curr_layer = dst;
+				}
+			}
+		}
+
+		if let Some(idx) = removing_layer {
+			self.delete_layer(idx);
+		}
 
 		self.draw_layer_settings(ui);
 	}

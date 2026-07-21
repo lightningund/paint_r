@@ -1,7 +1,3 @@
-/// An image that owns an array in memory of the pixel data, as well as a texture handle
-///
-/// Currently also stores edit history, but this may change
-
 use eframe::egui;
 use egui::{Color32, TextureHandle, ColorImage, Rect};
 
@@ -15,6 +11,9 @@ static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 	wrap_mode: egui::TextureWrapMode::ClampToEdge,
 };
 
+/// An image that owns an array in memory of the pixel data, as well as a texture handle
+///
+/// Currently also stores edit history, but this may change
 pub struct TextureImage {
 	pub saved: bool,
 	pub size: Rect,
