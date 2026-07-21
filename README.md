@@ -28,13 +28,13 @@ Planned features:
 - ~~undo/redo~~
 - ~~rectangle fill~~
 - ~~toggleable pixel grid~~
+- ~~keyboard shortcuts~~
 - layer blend modes
 	- normal (overwrite)
 	- add
 	- subtract
 	- multiply
 	- xor
-- keyboard shortcuts
 - expanding selection
 - subtracting selection
 - deleting selected

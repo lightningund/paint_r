@@ -140,9 +140,27 @@ impl eframe::App for MyApp {
 	}
 }
 
+/// Returns true if a given key was pressed this frame
+///
+/// Includes key-repeat events
+fn pressed(ctx: &egui::Context, key: egui::Key) -> bool {
+	ctx.input(|i| i.key_pressed(key))
+}
+
+/// Checks a list of keys at once
+fn key_list(ctx: &egui::Context, keys: Vec<egui::Key>) -> Vec<bool> {
+	let mut presses: Vec<bool> = vec![];
+	ctx.input(|i| {
+		for key in keys {
+			presses.push(i.key_pressed(key));
+		}
+	});
+	presses
+}
+
 /// Sets a value if a given key was pressed this frame
 ///
-/// Includes repeat key events
+/// Includes key-repeat events
 fn set_if_key<T>(ctx: &egui::Context, key: egui::Key, target: &mut T, val: T) {
 	if ctx.input(|i| i.key_pressed(key)) {
 		*target = val;
@@ -188,10 +206,8 @@ impl MyApp {
 		ui.horizontal(|ui| {
 			if ui.button("New").clicked() { self.creating_img = Some(Default::default()); }
 
-			if ui.button("Open").clicked() && let Some(path) = rfd::FileDialog::new().pick_file() {
-				if let Ok(image_data) = load_image_from_path(&path) {
-					self.assign_img(ui.ctx(), image_data, &path);
-				}
+			if ui.button("Open").clicked() {
+				self.open(ui.ctx());
 			}
 
 			if ui.add_enabled(!self.layers.is_empty() && self.path.is_some(), Button::new("Save")).clicked() {
@@ -220,20 +236,6 @@ impl MyApp {
 					// We can unwrap here because the only way to click the button is if selection is some
 					self.clipboard = Some(img.copy(self.selection.unwrap()));
 				}
-
-				ui.ctx().input(|i| {
-					for evt in &i.events {
-						use egui::Event::*;
-						match evt {
-							Copy => {
-								if let Some(sel) = self.selection {
-									self.clipboard = Some(img.copy(sel));
-								}
-							},
-							_ => {}
-						}
-					}
-				});
 			}
 
 			ui.checkbox(&mut self.save_after_release, "Save After Release")
@@ -278,10 +280,7 @@ impl MyApp {
 		ui.add_enabled_ui(self.clipboard.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::Paste, "Paste"));
 
 		// Also check for shortcuts
-		set_if_key(ui.ctx(), egui::Key::P, &mut self.tool, Tool::Pencil);
-		set_if_key(ui.ctx(), egui::Key::S, &mut self.tool, Tool::Select);
-		set_if_key(ui.ctx(), egui::Key::K, &mut self.tool, Tool::Eyedropper);
-		// TODO: Check for modifier shortcuts (new, open, save, save as, deselect, copy, paste)
+		self.shortcuts(ui);
 	}
 
 	/// The place where the actual image being edited is displayed
@@ -342,6 +341,90 @@ impl MyApp {
 
 // Functional stuff
 impl MyApp {
+	fn shortcuts(&mut self, ui: &Ui) {
+		use egui::Key;
+
+		// Check for modifier shortcuts (new, open, save, save as, deselect, copy, paste)
+		let ctx = ui.ctx();
+		let modifiers = ctx.input(|i| i.modifiers);
+
+		// Get the system shortcut ones (cut, copy, paste)
+		ctx.input(|i| {
+			for evt in &i.events {
+				use egui::Event::*;
+				// All three of these need an image to be present
+				if let Some(layer) = self.layers.get_active_mut() {
+					let img = &mut layer.image;
+					match evt {
+						Copy => {
+							println!("Copying!");
+							if let Some(select) = self.selection {
+								self.clipboard = Some(img.copy(select));
+							}
+						}, Cut => {
+							println!("Cutting!");
+							// TODO
+						}, Paste(_) => {
+							println!("Pasting!");
+							if self.clipboard.is_some() {
+								self.tool = Tool::Paste;
+							}
+						},
+						_ => {}
+					}
+				}
+			}
+		});
+
+		if modifiers.matches_logically(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT) {
+			if pressed(ctx, Key::S) {
+				println!("Saving As!");
+				self.save_as();
+			}
+		} else if modifiers.matches_logically(egui::Modifiers::COMMAND) {
+			if pressed(ctx, Key::N) { // New
+				self.creating_img = Some(Default::default());
+			} else if pressed(ctx, Key::O) { // Open
+				self.open(ctx);
+			} else if pressed(ctx, Key::D) { // Deselect
+				self.selection = None;
+			}
+
+			// Ones that need an image to be present
+			if let Some(layer) = self.layers.get_active_mut() {
+				let img = &mut layer.image;
+
+				if pressed(ctx, Key::S) { // Save
+					println!("Saving!");
+					self.save_img();
+				} else if pressed(ctx, Key::C) { // Copy
+					println!("Copying!");
+					if let Some(select) = self.selection {
+						self.clipboard = Some(img.copy(select));
+					}
+				} else if pressed(ctx, Key::X) { // Cut
+					println!("Cutting!");
+					// TODO
+				} else if pressed(ctx, Key::V) { // Paste
+					println!("Pasting!");
+					if self.clipboard.is_some() {
+						self.tool = Tool::Paste;
+					}
+				} else if pressed(ctx, Key::Z) { // Undo
+					println!("Undoing!");
+					if img.has_undo() { img.undo(); }
+				} else if pressed(ctx, Key::Y) { // Redo
+					println!("Redoing!");
+					if img.has_redo() { img.redo(); }
+				}
+			}
+		} else if modifiers.is_none() {
+			set_if_key(ctx, Key::P, &mut self.tool, Tool::Pencil);
+			set_if_key(ctx, Key::S, &mut self.tool, Tool::Select);
+			set_if_key(ctx, Key::K, &mut self.tool, Tool::Eyedropper);
+		}
+	}
+
 	fn tool_process(&mut self, response: egui::Response) -> Option<()> {
 		self.cursor_pos = None; // Reset it so that if the cursor is outside of the image, it stays None
 		let img = &mut self.layers.get_active_mut()?.image;
@@ -442,6 +525,14 @@ impl MyApp {
 				}
 
 				self.last_coord = Some(coords);
+			}
+		}
+	}
+
+	fn open(&mut self, ctx: &egui::Context) {
+		if let Some(path) = rfd::FileDialog::new().pick_file() {
+			if let Ok(image_data) = load_image_from_path(&path) {
+				self.assign_img(ctx, image_data, &path);
 			}
 		}
 	}
