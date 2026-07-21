@@ -9,41 +9,45 @@ Planned features:
 - ~~cursor pixel position readout~~
 - ~~image saving~~
 - ~~pixel by pixel edits~~
-- unsaved exit warning
 - ~~dragging to draw~~
 - ~~color picker~~
 - ~~eyedropper~~
-- color palette
 - ~~create new image~~
-- toggleable pixel grid
 - ~~usable as an "open with" program~~
 - ~~different colors on left and right click~~
-- checkerboard transparency background
 - ~~layers~~
 - ~~layer enabling~~
 - ~~layer deleting~~
 - ~~layer reordering~~
 - ~~layer renaming~~
+- ~~layer opacity~~
+- ~~adding images over the current canvas~~
+- ~~selecting~~
+- ~~copying selected~~
+- ~~pasting~~
+- ~~undo/redo~~
+- ~~rectangle fill~~
+- toggleable pixel grid
 - layer blend modes
 	- normal (overwrite)
 	- add
 	- subtract
 	- multiply
 	- xor
-- ~~layer opacity~~
 - keyboard shortcuts
-- ~~adding images over the current canvas~~
-- ~~selecting~~
 - expanding selection
 - subtracting selection
 - deleting selected
-- moving selected
-- ~~copying selected~~
 - copying to system clipboard
-- ~~pasting~~
 - pasting from system clipboard
 - rotating
 - canvas resize
 - canvas expand/shrink
-- ~~undo/redo~~
-- ~~rectangle fill~~
+- checkerboard transparency background
+- color palette
+- unsaved exit warning
+- tools
+	- line
+	- fill
+	- magic wand selection
+	- move selection
