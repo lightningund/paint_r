@@ -349,8 +349,11 @@ impl MyApp {
 			self.interacting = false;
 
 			if self.tool == Tool::Rect && let Some(rect) = self.selection.take() {
-				// TODO: Check if we dragged with the left or right
-				img.paste(rect.min(), &ColorImage::filled(rect.size(), self.color));
+				if response.drag_stopped_by(PRIMARY_CLICK) {
+					img.paste(rect.min(), &ColorImage::filled(rect.size(), self.color));
+				} else {
+					img.paste(rect.min(), &ColorImage::filled(rect.size(), self.secondary));
+				}
 			}
 
 			if self.save_after_release {
