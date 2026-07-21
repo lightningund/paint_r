@@ -17,6 +17,9 @@ use crate::types::*;
 use egui::PointerButton::Primary as PRIMARY_CLICK;
 use egui::PointerButton::Secondary as SECONDARY_CLICK;
 
+/// The minimum number of screen pixels per image pixel to still draw the gridlines
+static MIN_GRID_SIZE: f32 = 5.0;
+
 fn main() -> eframe::Result {
 	let args: Vec<String> = std::env::args().collect();
 
@@ -79,6 +82,7 @@ enum Tool {
 struct MyApp {
 	creating_img: Option<ImageCreator>, // If we currently have the create new image dialog up
 	save_after_release: bool, // Whether to save the undo state after each pixel or only when you stop clicking
+	show_grid: bool, // Whether to show gridlines around the pixels
 	color: Color32,
 	secondary: Color32,
 	scene_rect: Rect,
@@ -97,6 +101,7 @@ impl Default for MyApp {
 		Self {
 			creating_img: None,
 			save_after_release: true,
+			show_grid: false,
 			color: Color32::WHITE,
 			secondary: Color32::BLACK,
 			scene_rect: Rect::ZERO,
@@ -125,7 +130,7 @@ impl eframe::App for MyApp {
 					}
 				}
 
-				if ui.add_enabled(!self.layers.is_empty(), Button::new("Save")).clicked() {
+				if ui.add_enabled(!self.layers.is_empty() && self.path.is_some(), Button::new("Save")).clicked() {
 					self.save_img();
 				}
 
@@ -169,6 +174,9 @@ impl eframe::App for MyApp {
 
 				ui.checkbox(&mut self.save_after_release, "Save After Release")
 					.on_hover_text("Whether to save the undo state after each pixel or only when you stop clicking");
+
+				ui.checkbox(&mut self.show_grid, "Pixel Grid")
+					.on_hover_text("Whether to show gridlines around the pixels");
 			});
 
 			// Bresenham line algorithm test
@@ -284,11 +292,40 @@ impl MyApp {
 			self.layers.draw_layers(ui);
 
 			if let Some(rect) = &self.selection {
-			let painter = ui.painter();
+				let painter = ui.painter();
 				painter.rect_filled(rect.into(), 0, Color32::from_rgba_unmultiplied(0, 0, 255, 64));
 			}
 
 			inner_rect = ui.min_rect();
+
+			if self.show_grid {
+				let rect = ui.response().rect;
+				let ratio = ui.content_rect().width() / rect.width();
+
+				if ratio > MIN_GRID_SIZE {
+					if let Some(img) = self.layers.get_active() {
+						// Get visible bounds of the image
+						let min_x = rect.min.x.max(0.0).floor() as u32;
+						let min_y = rect.min.y.max(0.0).floor() as u32;
+						let max_x = rect.max.x.min(img.image.size.max.x).ceil() as u32;
+						let max_y = rect.max.y.min(img.image.size.max.y).ceil() as u32;
+
+						let painter = ui.painter();
+						let stroke = egui::Stroke::new(1.0 / ratio, Color32::GRAY);
+						let x_range = eframe::emath::Rangef::new(min_x as f32, max_x as f32);
+						let y_range = eframe::emath::Rangef::new(min_y as f32, max_y as f32);
+
+						for x in min_x..max_x {
+							painter.vline(x as f32, y_range, stroke);
+						}
+
+						for y in min_y..max_y {
+							painter.hline(x_range, y as f32, stroke);
+						}
+						// println!("[[{} {}] - [{} {}]]", min_x, min_y, max_x, max_y);
+					}
+				}
+			}
 		}).response;
 
 		// Reset the view to be exactly large enough to contain the contents

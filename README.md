@@ -27,7 +27,7 @@ Planned features:
 - ~~pasting~~
 - ~~undo/redo~~
 - ~~rectangle fill~~
-- toggleable pixel grid
+- ~~toggleable pixel grid~~
 - layer blend modes
 	- normal (overwrite)
 	- add
