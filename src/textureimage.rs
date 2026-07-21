@@ -111,7 +111,7 @@ impl TextureImage {
 
 	pub fn copy(&self, rect: PixRect) -> ColorImage {
 		let min = rect.min();
-		let max = coord_max(rect.max(), self.data.size);
+		let max = coord_min(rect.max(), self.data.size);
 		self.data.region_by_pixels(min, coord_sub(max, min))
 	}
 
