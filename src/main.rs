@@ -561,6 +561,9 @@ impl MyApp {
 	}
 
 	fn assign_img(&mut self, ctx: &egui::Context, data: ColorImage, path: &Path) {
+		// This feels like a memory leak tbh
+		self.layers = LayerManager::default();
+
 		self.layers.add_layer(TextureImage::new(data, ctx));
 
 		// force a zoom reset
