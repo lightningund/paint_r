@@ -63,10 +63,7 @@ impl PixRect {
 	pub fn size(&self) -> PixelCoord {
 		let mi = self.min();
 		let ma = self.max();
-		[
-			ma[0] - mi[0],
-			ma[1] - mi[1]
-		]
+		coord_sub(ma, mi)
 	}
 
 	/// Returns the rect that includes the given coordinate
