@@ -115,6 +115,19 @@ impl TextureImage {
 		self.data.region_by_pixels(min, coord_sub(max, min))
 	}
 
+	pub fn cut(&mut self, rect: PixRect) -> ColorImage {
+		let min = rect.min();
+		let max = coord_min(rect.max(), self.data.size);
+		let data = self.data.region_by_pixels(min, coord_sub(max, min));
+		self.redos.clear();
+		self.redos.push(Edit::Block(BlockEdit{
+			old: ColorImage::filled(coord_sub(max, min), Color32::from_black_alpha(0)),
+			coord: min,
+		}));
+		self.redo();
+		data
+	}
+
 	pub fn paste(&mut self, pos: PixelCoord, data: &ColorImage) {
 		self.redos.clear();
 		self.redos.push(Edit::Block(BlockEdit{

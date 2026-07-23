@@ -348,7 +348,9 @@ impl MyApp {
 							}
 						}, Cut => {
 							println!("Cutting!");
-							// TODO
+							if let Some(select) = self.selection {
+								self.clipboard = Some(img.cut(select));
+							}
 						}, Paste(_) => {
 							println!("Pasting!");
 							if self.clipboard.is_some() {
@@ -389,7 +391,9 @@ impl MyApp {
 					}
 				} else if pressed(ctx, Key::X) { // Cut
 					println!("Cutting!");
-					// TODO
+					if let Some(select) = self.selection {
+						self.clipboard = Some(img.cut(select));
+					}
 				} else if pressed(ctx, Key::V) { // Paste
 					println!("Pasting!");
 					if self.clipboard.is_some() {
@@ -397,10 +401,10 @@ impl MyApp {
 					}
 				} else if pressed(ctx, Key::Z) { // Undo
 					println!("Undoing!");
-					if img.has_undo() { img.undo(); }
+					img.undo();
 				} else if pressed(ctx, Key::Y) { // Redo
 					println!("Redoing!");
-					if img.has_redo() { img.redo(); }
+					img.redo();
 				}
 			}
 		} else if modifiers.is_none() {
