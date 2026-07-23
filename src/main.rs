@@ -236,24 +236,6 @@ impl MyApp {
 			ui.checkbox(&mut self.show_grid, "Pixel Grid")
 				.on_hover_text("Whether to show gridlines around the pixels");
 		});
-
-		// Bresenham line algorithm test
-		if ui.button("Test Lines").clicked() {
-			self.assign_img(ui.ctx(), ColorImage::filled([1000, 1000], Color32::WHITE), Path::new(""));
-			let mut quad_test = |dx: bool, dy: bool| {
-				let a = if dx { 500 + 462 } else { 500 - 462 };
-				let b = if dy { 500 + 191 } else { 500 - 191 };
-				self.last_coord = Some([500, 500]);
-				self.draw([a, b], false);
-				self.last_coord = Some([500, 500]);
-				self.draw([b, a], false);
-			};
-
-			quad_test(true, true);
-			quad_test(true, false);
-			quad_test(false, true);
-			quad_test(false, false);
-		}
 	}
 
 	/// Bar displaying some stats
@@ -589,22 +571,5 @@ impl MyApp {
 		self.scene_rect = Rect::NAN;
 
 		self.path = Some(path.to_path_buf());
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_bresenham() {
-		println!("to {:?}: {:?}", [6, 3], bresenham::full(6, 3));
-		println!("to {:?}: {:?}", [3, 6], bresenham::full(3, 6));
-		println!("to {:?}: {:?}", [6, -3], bresenham::full(6, -3));
-		println!("to {:?}: {:?}", [-3, 6], bresenham::full(-3, 6));
-		println!("to {:?}: {:?}", [3, -6], bresenham::full(3, -6));
-		println!("to {:?}: {:?}", [-6, 3], bresenham::full(-6, 3));
-		println!("to {:?}: {:?}", [-6, -3], bresenham::full(-6, -3));
-		println!("to {:?}: {:?}", [-3, -6], bresenham::full(-3, -6));
 	}
 }

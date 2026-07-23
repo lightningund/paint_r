@@ -31,7 +31,7 @@ fn quad(dx: i32, dy: i32) -> Vec<[i32; 2]> {
 }
 
 // Works in all directions, but only starting at the origin
-pub fn full(dx: i32, dy: i32) -> Vec<[i32; 2]> {
+fn full(dx: i32, dy: i32) -> Vec<[i32; 2]> {
 	let flipped_x = dx < 0;
 	let flipped_y = dy < 0;
 	quad(dx.abs(), dy.abs()).iter().map(|point| [
@@ -53,4 +53,22 @@ pub fn line(start: [usize; 2], end: [usize; 2]) -> Vec<[usize; 2]> {
 		.skip(1) // skip the first one since it's the one from last frame
 		.map(|point| [(point[0] + x0) as usize, (point[1] + y0) as usize])
 		.collect()
+}
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_bresenham() {
+		println!("to {:?}: {:?}", [6, 3], full(6, 3));
+		println!("to {:?}: {:?}", [3, 6], full(3, 6));
+		println!("to {:?}: {:?}", [6, -3], full(6, -3));
+		println!("to {:?}: {:?}", [-3, 6], full(-3, 6));
+		println!("to {:?}: {:?}", [3, -6], full(3, -6));
+		println!("to {:?}: {:?}", [-6, 3], full(-6, 3));
+		println!("to {:?}: {:?}", [-6, -3], full(-6, -3));
+		println!("to {:?}: {:?}", [-3, -6], full(-3, -6));
+	}
 }
