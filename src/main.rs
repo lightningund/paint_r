@@ -380,8 +380,6 @@ impl MyApp {
 						self.clipboard = Some(img.copy(select));
 					} else if pressed(ctx, Key::X) { // Cut
 						self.clipboard = Some(img.cut(select));
-					} else if pressed(ctx, Key::Delete) || pressed(ctx, Key::Backspace) { // Delete
-						img.delete(select);
 					}
 				}
 
@@ -403,6 +401,14 @@ impl MyApp {
 			set_if_key(ctx, Key::P, &mut self.tool, Tool::Pencil);
 			set_if_key(ctx, Key::S, &mut self.tool, Tool::Select);
 			set_if_key(ctx, Key::K, &mut self.tool, Tool::Eyedropper);
+			if let Some(layer) = self.layers.get_active_mut() {
+				let img = &mut layer.image;
+				if let Some(select) = self.selection {
+					if pressed(ctx, Key::Delete) || pressed(ctx, Key::Backspace) { // Delete
+						img.delete(select);
+					}
+				}
+			}
 		}
 	}
 
