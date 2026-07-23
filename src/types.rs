@@ -12,11 +12,11 @@ pub fn coord_to_idx(coord: PixCoord, img: &ColorImage) -> usize {
 }
 
 pub fn coord_min(a: PixCoord, b: PixCoord) -> PixCoord {
-	[ a[0].min(b[0]), a[1].min(b[1]) ]
+	[a[0].min(b[0]), a[1].min(b[1])]
 }
 
 pub fn coord_max(a: PixCoord, b: PixCoord) -> PixCoord {
-	[ a[0].max(b[0]), a[1].max(b[1]) ]
+	[a[0].max(b[0]), a[1].max(b[1])]
 }
 
 pub fn coord_add(a: PixCoord, b: PixCoord) -> PixCoord {
@@ -36,7 +36,7 @@ pub struct PixRect {
 impl From<PixRect> for Rect {
 	fn from(value: PixRect) -> Self {
 		let min = value.min();
-		let max = value.max();
+		let max = value.outer();
 		Rect{
 			min: egui::Pos2::new(min[0] as f32, min[1] as f32),
 			max: egui::Pos2::new(max[0] as f32, max[1] as f32),
@@ -57,12 +57,24 @@ impl PixRect {
 	}
 
 	pub fn max(&self) -> PixCoord {
-		coord_add(coord_max(self.a, self.b), [1, 1])
+		coord_max(self.a, self.b)
+	}
+
+	/// Max +1, good for boundaries that are exclusive
+	pub fn outer(&self) -> PixCoord {
+		coord_add(self.max(), [1, 1])
 	}
 
 	pub fn size(&self) -> PixCoord {
 		let mi = self.min();
 		let ma = self.max();
+		coord_sub(ma, mi)
+	}
+
+	/// Like `outer()` but for size
+	pub fn outer_size(&self) -> PixCoord {
+		let mi = self.min();
+		let ma = self.outer();
 		coord_sub(ma, mi)
 	}
 
@@ -74,6 +86,7 @@ impl PixRect {
 		}
 	}
 
+	/// Caps the size
 	pub fn limit(&self, max_size: PixCoord) -> Self {
 		Self {
 			a: coord_min(self.min(), max_size),

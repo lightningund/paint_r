@@ -61,7 +61,7 @@ impl TextureImage {
 	pub fn undo(&mut self) {
 		if let Some(edit) = self.history.pop() {
 			let (redo, area) = edit.apply(&mut self.data);
-			self.handle.set_partial(area.min(), self.data.region_by_pixels(area.min(), area.size()), TEX_OPTS);
+			self.handle.set_partial(area.min(), self.data.region_by_pixels(area.min(), area.outer_size()), TEX_OPTS);
 			self.redos.push(redo);
 		}
 	}
@@ -72,7 +72,7 @@ impl TextureImage {
 	pub fn redo(&mut self) {
 		if let Some(edit) = self.redos.pop() {
 			let (undo, area) = edit.apply(&mut self.data);
-			self.handle.set_partial(area.min(), self.data.region_by_pixels(area.min(), area.size()), TEX_OPTS);
+			self.handle.set_partial(area.min(), self.data.region_by_pixels(area.min(), area.outer_size()), TEX_OPTS);
 			self.history.push(undo);
 		}
 
@@ -119,15 +119,18 @@ impl TextureImage {
 	}
 
 	pub fn copy(&self, rect: PixRect) -> ColorImage {
-		let min = rect.min();
-		let max = coord_min(rect.max(), self.data.size);
-		self.data.region_by_pixels(min, coord_sub(max, min))
+		// The actual size of rect that we can use
+		let real = rect.limit(self.data.size);
+		let size = real.outer_size();
+		let min = real.min();
+		self.data.region_by_pixels(min, size)
 	}
 
 	pub fn cut(&mut self, rect: PixRect) -> ColorImage {
-		let min = rect.min();
-		let max = coord_min(rect.max(), self.data.size);
-		let size = coord_sub(max, min);
+		// The actual size of rect that we can use
+		let real = rect.limit(self.data.size);
+		let size = real.outer_size();
+		let min = real.min();
 		let data = self.data.region_by_pixels(min, size);
 		self.apply(Edit::Block(BlockEdit{
 			old: ColorImage::filled(size, Color32::from_black_alpha(0)),
@@ -144,9 +147,10 @@ impl TextureImage {
 	}
 
 	pub fn delete(&mut self, rect: PixRect) {
-		let min = rect.min();
-		let max = coord_min(rect.max(), self.data.size);
-		let size = coord_sub(max, min);
+		// The actual size of rect that we can use
+		let real = rect.limit(self.data.size);
+		let size = real.outer_size();
+		let min = real.min();
 		self.apply(Edit::Block(BlockEdit{
 			old: ColorImage::filled(size, Color32::TRANSPARENT),
 			coord: min,
