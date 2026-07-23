@@ -369,24 +369,24 @@ impl MyApp {
 				self.creating_img = Some(Default::default());
 			} else if pressed(ctx, Key::O) { // Open
 				self.open(ctx);
-			} else if pressed(ctx, Key::D) { // Deselect
-				self.selection = None;
 			}
 
 			// Ones that need an image to be present
 			if let Some(layer) = self.layers.get_active_mut() {
 				let img = &mut layer.image;
 
+				if let Some(select) = self.selection {
+					if pressed(ctx, Key::C) { // Copy
+						self.clipboard = Some(img.copy(select));
+					} else if pressed(ctx, Key::X) { // Cut
+						self.clipboard = Some(img.cut(select));
+					} else if pressed(ctx, Key::Delete) || pressed(ctx, Key::Backspace) { // Delete
+						img.delete(select);
+					}
+				}
+
 				if pressed(ctx, Key::S) { // Save
 					self.save_img();
-				} else if pressed(ctx, Key::C) { // Copy
-					if let Some(select) = self.selection {
-						self.clipboard = Some(img.copy(select));
-					}
-				} else if pressed(ctx, Key::X) { // Cut
-					if let Some(select) = self.selection {
-						self.clipboard = Some(img.cut(select));
-					}
 				} else if pressed(ctx, Key::V) { // Paste
 					if self.clipboard.is_some() {
 						self.tool = Tool::Paste;
@@ -395,10 +395,8 @@ impl MyApp {
 					img.undo();
 				} else if pressed(ctx, Key::Y) { // Redo
 					img.redo();
-				} else if pressed(ctx, Key::Delete) || pressed(ctx, Key::Backspace) {
-					if let Some(select) = self.selection {
-						self.clipboard = Some(img.cut(select));
-					}
+				} else if pressed(ctx, Key::D) { // Deselect
+					self.selection = None;
 				}
 			}
 		} else if modifiers.is_none() {
