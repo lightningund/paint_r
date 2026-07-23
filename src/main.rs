@@ -77,6 +77,7 @@ enum Tool {
 	Rect,
 	Select,
 	Paste,
+	Line,
 }
 
 struct MyApp {
@@ -147,17 +148,6 @@ fn pressed(ctx: &egui::Context, key: egui::Key) -> bool {
 	ctx.input(|i| i.key_pressed(key))
 }
 
-/// Checks a list of keys at once
-fn key_list(ctx: &egui::Context, keys: Vec<egui::Key>) -> Vec<bool> {
-	let mut presses: Vec<bool> = vec![];
-	ctx.input(|i| {
-		for key in keys {
-			presses.push(i.key_pressed(key));
-		}
-	});
-	presses
-}
-
 /// Sets a value if a given key was pressed this frame
 ///
 /// Includes key-repeat events
@@ -204,7 +194,9 @@ impl MyApp {
 	/// All of the main settings
 	fn top_bar(&mut self, ui: &mut Ui) {
 		ui.horizontal(|ui| {
-			if ui.button("New").clicked() { self.creating_img = Some(Default::default()); }
+			if ui.button("New").clicked() {
+				self.creating_img = Some(Default::default());
+			}
 
 			if ui.button("Open").clicked() {
 				self.open(ui.ctx());
@@ -275,6 +267,7 @@ impl MyApp {
 	fn tool_panel(&mut self, ui: &mut Ui) {
 		ui.selectable_value(&mut self.tool, Tool::Pencil, "Pencil");
 		ui.selectable_value(&mut self.tool, Tool::Rect, "Rect");
+		ui.selectable_value(&mut self.tool, Tool::Line, "Line");
 		ui.selectable_value(&mut self.tool, Tool::Select, "Select");
 		ui.selectable_value(&mut self.tool, Tool::Eyedropper, "Eyedropper");
 		ui.add_enabled_ui(self.clipboard.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::Paste, "Paste"));
@@ -296,7 +289,17 @@ impl MyApp {
 
 			if let Some(rect) = &self.selection {
 				let painter = ui.painter();
-				painter.rect_filled(rect.into(), 0, Color32::from_rgba_unmultiplied(0, 0, 255, 64));
+				if self.tool == Tool::Line && self.interacting {
+					painter.extend(bresenham::line(rect.a, rect.b).iter().map(|coord| {
+						eframe::epaint::Shape::Rect(eframe::epaint::RectShape::filled(
+							PixRect {a: *coord, b: *coord}.into(),
+							0.0,
+							self.color
+						))
+					}));
+				} else {
+					painter.rect_filled(rect.into(), 0, Color32::from_rgba_unmultiplied(0, 0, 255, 64));
+				}
 			}
 
 			inner_rect = ui.min_rect();
@@ -434,11 +437,17 @@ impl MyApp {
 			self.last_coord = None;
 			self.interacting = false;
 
-			if self.tool == Tool::Rect && let Some(rect) = self.selection.take() {
-				if response.drag_stopped_by(PRIMARY_CLICK) {
-					img.paste(rect.min(), &ColorImage::filled(rect.size(), self.color));
-				} else {
-					img.paste(rect.min(), &ColorImage::filled(rect.size(), self.secondary));
+			let col = if response.drag_stopped_by(PRIMARY_CLICK) { self.color } else { self.secondary };
+			if self.tool == Tool::Rect {
+				if let Some(rect) = self.selection.take() {
+					img.paste(rect.min(), &ColorImage::filled(rect.size(), col));
+				}
+			} else if self.tool == Tool::Line {
+				if let Some(rect) = self.selection.take() {
+					for point in bresenham::line(rect.a, rect.b) {
+						img.edit(col, point);
+					}
+					img.save_state();
 				}
 			}
 
@@ -494,6 +503,16 @@ impl MyApp {
 					if !self.interacting {
 						let section = self.clipboard.as_ref()?;
 						img.paste(coords, section);
+					}
+				},
+				Tool::Line => {
+					if self.interacting && let Some(rect) = &mut self.selection {
+						rect.b = coords;
+					} else {
+						self.selection = Some(PixRect{
+							a: coords,
+							b: coords
+						});
 					}
 				},
 			}

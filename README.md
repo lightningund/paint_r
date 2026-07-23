@@ -47,7 +47,11 @@ Planned features:
 - color palette
 - unsaved exit warning
 - tools
-	- line
+	- ~~line~~
+		- with thickness
+		- with locking
 	- fill
 	- magic wand selection
 	- move selection
+	- move selected
+	- brush
