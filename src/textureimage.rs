@@ -82,6 +82,8 @@ impl TextureImage {
 	/// Set a single pixel to a color
 	///
 	/// Does nothing if the coordinates are out of the bounds of the image
+	///
+	/// Handled seperately so that individual pixel edits can be batched in the history
 	pub fn edit(&mut self, color: Color32, coord: PixelCoord) {
 		if coord[0] >= self.data.width() || coord[1] >= self.data.height() { return; }
 
@@ -109,6 +111,13 @@ impl TextureImage {
 		}
 	}
 
+	fn apply(&mut self, edit: Edit) {
+		self.redos.clear();
+		self.redos.push(edit);
+		self.redo();
+		self.save_state();
+	}
+
 	pub fn copy(&self, rect: PixRect) -> ColorImage {
 		let min = rect.min();
 		let max = coord_min(rect.max(), self.data.size);
@@ -118,25 +127,30 @@ impl TextureImage {
 	pub fn cut(&mut self, rect: PixRect) -> ColorImage {
 		let min = rect.min();
 		let max = coord_min(rect.max(), self.data.size);
-		let data = self.data.region_by_pixels(min, coord_sub(max, min));
-		self.redos.clear();
-		self.redos.push(Edit::Block(BlockEdit{
-			old: ColorImage::filled(coord_sub(max, min), Color32::from_black_alpha(0)),
+		let size = coord_sub(max, min);
+		let data = self.data.region_by_pixels(min, size);
+		self.apply(Edit::Block(BlockEdit{
+			old: ColorImage::filled(size, Color32::from_black_alpha(0)),
 			coord: min,
 		}));
-		self.redo();
 		data
 	}
 
 	pub fn paste(&mut self, pos: PixelCoord, data: &ColorImage) {
-		self.redos.clear();
-		self.redos.push(Edit::Block(BlockEdit{
+		self.apply(Edit::Block(BlockEdit{
 			old: data.clone(),
 			coord: pos,
 		}));
-		self.redo();
+	}
 
-		self.saved = true;
+	pub fn delete(&mut self, rect: PixRect) {
+		let min = rect.min();
+		let max = coord_min(rect.max(), self.data.size);
+		let size = coord_sub(max, min);
+		self.apply(Edit::Block(BlockEdit{
+			old: ColorImage::filled(size, Color32::TRANSPARENT),
+			coord: min,
+		}));
 	}
 
 	/// Mark the current edit as complete and push it to the history

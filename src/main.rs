@@ -342,17 +342,14 @@ impl MyApp {
 					let img = &mut layer.image;
 					match evt {
 						Copy => {
-							println!("Copying!");
 							if let Some(select) = self.selection {
 								self.clipboard = Some(img.copy(select));
 							}
 						}, Cut => {
-							println!("Cutting!");
 							if let Some(select) = self.selection {
 								self.clipboard = Some(img.cut(select));
 							}
 						}, Paste(_) => {
-							println!("Pasting!");
 							if self.clipboard.is_some() {
 								self.tool = Tool::Paste;
 							}
@@ -365,7 +362,6 @@ impl MyApp {
 
 		if modifiers.matches_logically(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT) {
 			if pressed(ctx, Key::S) {
-				println!("Saving As!");
 				self.save_as();
 			}
 		} else if modifiers.matches_logically(egui::Modifiers::COMMAND) {
@@ -382,29 +378,27 @@ impl MyApp {
 				let img = &mut layer.image;
 
 				if pressed(ctx, Key::S) { // Save
-					println!("Saving!");
 					self.save_img();
 				} else if pressed(ctx, Key::C) { // Copy
-					println!("Copying!");
 					if let Some(select) = self.selection {
 						self.clipboard = Some(img.copy(select));
 					}
 				} else if pressed(ctx, Key::X) { // Cut
-					println!("Cutting!");
 					if let Some(select) = self.selection {
 						self.clipboard = Some(img.cut(select));
 					}
 				} else if pressed(ctx, Key::V) { // Paste
-					println!("Pasting!");
 					if self.clipboard.is_some() {
 						self.tool = Tool::Paste;
 					}
 				} else if pressed(ctx, Key::Z) { // Undo
-					println!("Undoing!");
 					img.undo();
 				} else if pressed(ctx, Key::Y) { // Redo
-					println!("Redoing!");
 					img.redo();
+				} else if pressed(ctx, Key::Delete) || pressed(ctx, Key::Backspace) {
+					if let Some(select) = self.selection {
+						self.clipboard = Some(img.cut(select));
+					}
 				}
 			}
 		} else if modifiers.is_none() {
@@ -457,7 +451,8 @@ impl MyApp {
 				Tool::Pencil => {
 					self.draw(coords, primary_down);
 				},
-				Tool::Rect => {
+				// These are grouped since they are all have the exact same dragging behaviour
+				Tool::Select | Tool::Rect | Tool::Line => {
 					if self.interacting && let Some(rect) = &mut self.selection {
 						rect.b = coords;
 					} else {
@@ -474,31 +469,11 @@ impl MyApp {
 						self.secondary = img.data.pixels[idx];
 					}
 				},
-				Tool::Select => {
-					if self.interacting && let Some(rect) = &mut self.selection {
-						rect.b = coords;
-					} else {
-						self.selection = Some(PixRect{
-							a: coords,
-							b: coords
-						});
-					}
-				},
 				Tool::Paste => {
 					// Only do it on the first frame
 					if !self.interacting {
 						let section = self.clipboard.as_ref()?;
 						img.paste(coords, section);
-					}
-				},
-				Tool::Line => {
-					if self.interacting && let Some(rect) = &mut self.selection {
-						rect.b = coords;
-					} else {
-						self.selection = Some(PixRect{
-							a: coords,
-							b: coords
-						});
 					}
 				},
 			}
