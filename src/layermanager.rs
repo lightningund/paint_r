@@ -3,12 +3,12 @@ use eframe::egui;
 use egui::{Ui, ColorImage, Color32};
 
 use crate::textureimage::*;
-use crate::types::PixelCoord;
+use crate::types::PixCoord;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct DimensionError {
-	target_size: PixelCoord,
-	actual_size: PixelCoord,
+	target_size: PixCoord,
+	actual_size: PixCoord,
 }
 
 impl std::fmt::Display for DimensionError {
@@ -33,7 +33,7 @@ pub struct Layer {
 
 #[derive(Default)]
 pub struct LayerManager {
-	size: PixelCoord,
+	size: PixCoord,
 	layers: Vec<Layer>,
 	curr_layer: usize,
 	backup_settings: Option<LayerSettings>,

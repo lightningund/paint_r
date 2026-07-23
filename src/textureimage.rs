@@ -84,7 +84,7 @@ impl TextureImage {
 	/// Does nothing if the coordinates are out of the bounds of the image
 	///
 	/// Handled seperately so that individual pixel edits can be batched in the history
-	pub fn edit(&mut self, color: Color32, coord: PixelCoord) {
+	pub fn edit(&mut self, color: Color32, coord: PixCoord) {
 		if coord[0] >= self.data.width() || coord[1] >= self.data.height() { return; }
 
 		if self.saved {
@@ -136,7 +136,7 @@ impl TextureImage {
 		data
 	}
 
-	pub fn paste(&mut self, pos: PixelCoord, data: &ColorImage) {
+	pub fn paste(&mut self, pos: PixCoord, data: &ColorImage) {
 		self.apply(Edit::Block(BlockEdit{
 			old: data.clone(),
 			coord: pos,

@@ -89,11 +89,11 @@ struct MyApp {
 	scene_rect: Rect,
 	interacting: bool,
 	layers: LayerManager,
-	last_coord: Option<PixelCoord>, // The coordinate of the last pixel we modified while dragging
+	last_coord: Option<PixCoord>, // The coordinate of the last pixel we modified while dragging
 	tool: Tool,
 	selection: Option<PixRect>,
 	clipboard: Option<ColorImage>,
-	cursor_pos: Option<PixelCoord>,
+	cursor_pos: Option<PixCoord>,
 	path: Option<PathBuf>,
 }
 
@@ -484,7 +484,7 @@ impl MyApp {
 		Some(())
 	}
 
-	fn draw(&mut self, coords: PixelCoord, primary: bool) {
+	fn draw(&mut self, coords: PixCoord, primary: bool) {
 		if self.last_coord.is_none_or(|last| coords != last) {
 			if let Some(layer) = &mut self.layers.get_active_mut() {
 				let img = &mut layer.image;

@@ -3,18 +3,18 @@ use egui::{Color32, ColorImage};
 
 use crate::types::*;
 
-fn pixel_from_coord(coord: PixelCoord, img: &ColorImage) -> Option<Color32> {
+fn pixel_from_coord(coord: PixCoord, img: &ColorImage) -> Option<Color32> {
 	img.pixels.get(coord[0] + coord[1] * img.width()).cloned()
 }
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct PixelEdit {
 	pub oldcol: Color32,
-	pub coord: PixelCoord,
+	pub coord: PixCoord,
 }
 
 impl PixelEdit {
-	pub fn new(data: &ColorImage, coord: PixelCoord) -> Option<Self> {
+	pub fn new(data: &ColorImage, coord: PixCoord) -> Option<Self> {
 		Some(PixelEdit {
 			oldcol: pixel_from_coord(coord, data)?,
 			coord
@@ -25,11 +25,11 @@ impl PixelEdit {
 #[derive(Default, Debug, Clone)]
 pub struct BlockEdit {
 	pub old: ColorImage,
-	pub coord: PixelCoord,
+	pub coord: PixCoord,
 }
 
 impl BlockEdit {
-	pub fn new(target: &ColorImage, data: &ColorImage, coord: PixelCoord) -> Self {
+	pub fn new(target: &ColorImage, data: &ColorImage, coord: PixCoord) -> Self {
 		let block_end = coord_add(coord, data.size);
 		let max_end = coord_min(block_end, target.size);
 		let real_size = coord_sub(max_end, coord);

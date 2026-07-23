@@ -1,36 +1,36 @@
 use eframe::egui;
 use egui::{ColorImage, Rect, Pos2};
 
-pub type PixelCoord = [usize; 2];
+pub type PixCoord = [usize; 2];
 
-pub fn size_to_rect(size: PixelCoord) -> Rect {
+pub fn size_to_rect(size: PixCoord) -> Rect {
 	Rect::from_two_pos(Pos2::ZERO, Pos2::new(size[0] as f32, size[1] as f32))
 }
 
-pub fn coord_to_idx(coord: PixelCoord, img: &ColorImage) -> usize {
+pub fn coord_to_idx(coord: PixCoord, img: &ColorImage) -> usize {
 	coord[0] + coord[1] * img.width()
 }
 
-pub fn coord_min(a: PixelCoord, b: PixelCoord) -> PixelCoord {
+pub fn coord_min(a: PixCoord, b: PixCoord) -> PixCoord {
 	[ a[0].min(b[0]), a[1].min(b[1]) ]
 }
 
-pub fn coord_max(a: PixelCoord, b: PixelCoord) -> PixelCoord {
+pub fn coord_max(a: PixCoord, b: PixCoord) -> PixCoord {
 	[ a[0].max(b[0]), a[1].max(b[1]) ]
 }
 
-pub fn coord_add(a: PixelCoord, b: PixelCoord) -> PixelCoord {
+pub fn coord_add(a: PixCoord, b: PixCoord) -> PixCoord {
 	[a[0] + b[0], a[1] + b[1]]
 }
 
-pub fn coord_sub(a: PixelCoord, b: PixelCoord) -> PixelCoord {
+pub fn coord_sub(a: PixCoord, b: PixCoord) -> PixCoord {
 	[a[0] - b[0], a[1] - b[1]]
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PixRect {
-	pub a: PixelCoord,
-	pub b: PixelCoord,
+	pub a: PixCoord,
+	pub b: PixCoord,
 }
 
 impl From<PixRect> for Rect {
@@ -52,25 +52,32 @@ impl From<&PixRect> for Rect {
 }
 
 impl PixRect {
-	pub fn min(&self) -> PixelCoord {
+	pub fn min(&self) -> PixCoord {
 		coord_min(self.a, self.b)
 	}
 
-	pub fn max(&self) -> PixelCoord {
+	pub fn max(&self) -> PixCoord {
 		coord_add(coord_max(self.a, self.b), [1, 1])
 	}
 
-	pub fn size(&self) -> PixelCoord {
+	pub fn size(&self) -> PixCoord {
 		let mi = self.min();
 		let ma = self.max();
 		coord_sub(ma, mi)
 	}
 
 	/// Returns the rect that includes the given coordinate
-	pub fn include(&self, coord: PixelCoord) -> Self {
+	pub fn include(&self, coord: PixCoord) -> Self {
 		Self {
-			a: coord_min(coord_min(self.a, self.b), coord),
-			b: coord_max(coord_max(self.a, self.b), coord)
+			a: coord_min(self.min(), coord),
+			b: coord_max(self.max(), coord)
+		}
+	}
+
+	pub fn limit(&self, max_size: PixCoord) -> Self {
+		Self {
+			a: coord_min(self.min(), max_size),
+			b: coord_min(self.max(), max_size)
 		}
 	}
 }
