@@ -47,6 +47,8 @@ Planned features:
 - color palette
 - unsaved exit warning
 - tools
+	- ~~rectangle~~
+		- just outline
 	- ~~line~~
 		- with thickness
 		- with locking
