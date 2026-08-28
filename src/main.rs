@@ -202,6 +202,12 @@ impl MyApp {
 				self.open(ui.ctx());
 			}
 
+			if ui.add_enabled(!self.layers.is_empty(), Button::new("Import"))
+				.on_hover_text("Import an image as a new layer above the current on")
+				.clicked() {
+				self.import(ui.ctx());
+			}
+
 			if ui.add_enabled(!self.layers.is_empty() && self.path.is_some(), Button::new("Save")).clicked() {
 				self.save_img();
 			}
@@ -349,7 +355,8 @@ impl MyApp {
 							if let Some(select) = self.selection {
 								self.clipboard = Some(img.cut(select));
 							}
-						}, Paste(_) => {
+						}, Paste(clip) => {
+							println!("Event Paste {clip}");
 							if self.clipboard.is_some() {
 								self.tool = Tool::Paste;
 							}
@@ -386,6 +393,7 @@ impl MyApp {
 				if pressed(ctx, Key::S) { // Save
 					self.save_img();
 				} else if pressed(ctx, Key::V) { // Paste
+					println!("Normal Paste");
 					if self.clipboard.is_some() {
 						self.tool = Tool::Paste;
 					}
@@ -517,6 +525,14 @@ impl MyApp {
 		if let Some(path) = rfd::FileDialog::new().pick_file() {
 			if let Ok(image_data) = load_image_from_path(&path) {
 				self.assign_img(ctx, image_data, &path);
+			}
+		}
+	}
+
+	fn import(&mut self, ctx: &egui::Context) {
+		if let Some(path) = rfd::FileDialog::new().pick_file() {
+			if let Ok(data) = load_image_from_path(&path) {
+				self.layers.add_layer_unsized(TextureImage::new(data, ctx), ctx);
 			}
 		}
 	}

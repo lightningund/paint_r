@@ -74,6 +74,17 @@ impl LayerManager {
 		Ok(self.layers.last().unwrap())
 	}
 
+	/// Allows creating a layer with a source image that is not the same size as the layers themselves
+	///
+	/// If the source image is too small, it will be placed in the top left corner and the rest of the layer will be blank
+	///
+	/// If the source image is too large, the overflow will be lost and the top left corner that fits will be retained
+	pub fn add_layer_unsized(&mut self, img: TextureImage, ctx: &egui::Context) {
+		let mut bg = TextureImage::new(ColorImage::filled(self.size, Color32::TRANSPARENT), ctx);
+		bg.paste([0, 0], &img.data);
+		self.add_layer(bg);
+	}
+
 	/// Does nothing if empty
 	pub fn add_empty_layer(&mut self, ctx: &egui::Context) {
 		if self.is_empty() { return; }

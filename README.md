@@ -46,6 +46,7 @@ Planned features:
 - checkerboard transparency background
 - color palette
 - unsaved exit warning
+- import images on top of the existing canvas
 - tools
 	- ~~rectangle~~
 		- just outline
