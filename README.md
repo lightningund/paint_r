@@ -1,6 +1,10 @@
 # PaintR
 Simple image editing program written in Rust. Inspired both by Paint.NET (my beloved) not being available on Linux, and a 2 hour teardown on why C++ sucks making me want to learn Rust.
 
+Notes on removed features:
+- **Save on release:**
+	- Confusing, led to a lot of code spaghetti, artifact of a very old system, considered probably not a big deal to drop
+
 Planned features:
 - ~~image display~~
 - ~~zooming~~

@@ -85,7 +85,6 @@ enum Tool {
 
 struct MyApp {
 	creating_img: Option<ImageCreator>, // If we currently have the create new image dialog up
-	save_after_release: bool, // Whether to save the undo state after each pixel or only when you stop clicking
 	show_grid: bool, // Whether to show gridlines around the pixels
 	color: Color32,
 	secondary: Color32,
@@ -105,7 +104,6 @@ impl Default for MyApp {
 	fn default() -> Self {
 		Self {
 			creating_img: None,
-			save_after_release: true,
 			show_grid: false,
 			color: Color32::WHITE,
 			secondary: Color32::BLACK,
@@ -240,9 +238,6 @@ impl MyApp {
 					self.clipboard = Some(img.copy(self.selection.unwrap()));
 				}
 			}
-
-			ui.checkbox(&mut self.save_after_release, "Save After Release")
-				.on_hover_text("Whether to save the undo state after each pixel or only when you stop clicking");
 
 			ui.checkbox(&mut self.show_grid, "Pixel Grid")
 				.on_hover_text("Whether to show gridlines around the pixels");
@@ -450,9 +445,7 @@ impl MyApp {
 				}
 			}
 
-			if self.save_after_release {
-				img.save_state();
-			}
+			img.save_state();
 		}
 
 		if pos.x < 0.0 || pos.y < 0.0 { return None; }
@@ -529,15 +522,11 @@ impl MyApp {
 				if let Some(last) = self.last_coord {
 					for point in bresenham::line(last, coords) {
 						img.edit(color, point);
-						if !self.save_after_release {
-							img.save_state();
-						}
+						img.save_state();
 					}
 				} else {
 					img.edit(color, coords);
-					if !self.save_after_release {
-						img.save_state();
-					}
+					img.save_state();
 				}
 			}
 		}
