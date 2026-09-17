@@ -278,6 +278,17 @@ impl MyApp {
 		let response = scene.show(ui, &mut self.scene_rect, |ui| {
 			self.layers.draw_layers(ui);
 
+			if self.tool == Tool::Pencil {
+				let painter = ui.painter();
+				painter.extend(self.drag_path.iter().map(|coord| {
+					eframe::epaint::Shape::Rect(eframe::epaint::RectShape::filled(
+						PixRect {a: *coord, b: *coord}.into(),
+						0.0,
+						self.color
+					))
+				}));
+			}
+
 			if let Some(rect) = &self.selection {
 				let painter = ui.painter();
 				if self.tool == Tool::Line && self.interacting {
@@ -428,7 +439,10 @@ impl MyApp {
 		let img = &mut self.layers.get_active_mut()?.image;
 		let pos = response.hover_pos()?;
 
-		if response.drag_stopped() {
+		if response.drag_stopped() && (
+			response.drag_stopped_by(PRIMARY_CLICK)
+			|| response.drag_stopped_by(SECONDARY_CLICK)
+		) {
 			self.last_coord = None;
 			self.interacting = false;
 
