@@ -448,6 +448,7 @@ impl MyApp {
 			}
 
 			img.save_state();
+			self.drag_path.clear();
 		}
 
 		if pos.x < 0.0 || pos.y < 0.0 { return None; }
