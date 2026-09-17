@@ -10,6 +10,7 @@ use eframe::egui;
 use egui::{Color32, Button, Ui, ColorImage, Rect};
 use image::{ImageReader};
 
+use crate::edit::{PixelEdit, PixelEdits, create_pixel_edits};
 use crate::textureimage::*;
 use crate::layermanager::*;
 use crate::types::*;
@@ -438,11 +439,23 @@ impl MyApp {
 				}
 			} else if self.tool == Tool::Line {
 				if let Some(rect) = self.selection.take() {
-					for point in bresenham::line(rect.a, rect.b) {
-						img.edit(col, point);
-					}
-					img.save_state();
+					// let edits = bresenham::line(rect.a, rect.b).iter().map(|pos| {
+					// 	PixelEdit {
+					// 		oldcol: col,
+					// 		coord: *pos,
+					// 	}
+					// }).collect::<Vec<PixelEdit>>();
+					let edits = create_pixel_edits(col, &bresenham::line(rect.a, rect.b));
+					img.edit(edits);
 				}
+			} else if self.tool == Tool::Pencil {
+				let edits = self.drag_path.iter().map(|pos| {
+					PixelEdit {
+						oldcol: col,
+						coord: *pos,
+					}
+				}).collect::<Vec<PixelEdit>>();
+				img.edit(edits);
 			}
 
 			img.save_state();

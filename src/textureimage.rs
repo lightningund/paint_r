@@ -84,36 +84,36 @@ impl TextureImage {
 	/// Does nothing if the coordinates are out of the bounds of the image
 	///
 	/// Handled seperately so that individual pixel edits can be batched in the history
-	pub fn edit(&mut self, color: Color32, coord: PixCoord) {
-		if coord[0] >= self.data.width() || coord[1] >= self.data.height() { return; }
+	// pub fn edit(&mut self, color: Color32, coord: PixCoord) {
+	// 	if coord[0] >= self.data.width() || coord[1] >= self.data.height() { return; }
 
-		if self.saved {
-			self.saved = false;
-			self.history.push(Edit::Pixels(vec![]));
-		}
+	// 	if self.saved {
+	// 		self.saved = false;
+	// 		self.history.push(Edit::Pixels(vec![]));
+	// 	}
 
-		// If the last one isn't a pixels edit, then push one
-		match self.history.last() {
-			Some(Edit::Pixels(_)) => {},
-			_ => { self.history.push(Edit::Pixels(vec![])); }
-		}
+	// 	// If the last one isn't a pixels edit, then push one
+	// 	match self.history.last() {
+	// 		Some(Edit::Pixels(_)) => {},
+	// 		_ => { self.history.push(Edit::Pixels(vec![])); }
+	// 	}
 
-		// We know this is going to be true, but whatever I guess
-		// There's definitely a better way to do this
-		if let Some(Edit::Pixels(edits)) = self.history.last_mut() {
-			self.redos.clear();
-			// We can unwrap here since we already did bounds checking on the top
-			edits.push(PixelEdit::new(&self.data, coord).unwrap()); // add this edit to the current ongoing "Undo" edit
-			self.set_edit(&PixelEdit{
-				oldcol: color,
-				coord,
-			});
-		}
-	}
+	// 	// We know this is going to be true, but whatever I guess
+	// 	// There's definitely a better way to do this
+	// 	if let Some(Edit::Pixels(edits)) = self.history.last_mut() {
+	// 		self.redos.clear();
+	// 		// We can unwrap here since we already did bounds checking on the top
+	// 		edits.push(PixelEdit::new(&self.data, coord).unwrap()); // add this edit to the current ongoing "Undo" edit
+	// 		self.set_edit(&PixelEdit{
+	// 			oldcol: color,
+	// 			coord,
+	// 		});
+	// 	}
+	// }
 
-	fn apply(&mut self, edit: Edit) {
+	pub fn edit<E: ImageEdit + 'static>(&mut self, edit: E) {
 		self.redos.clear();
-		self.redos.push(edit);
+		self.redos.push(Box::new(edit));
 		self.redo();
 		self.save_state();
 	}
@@ -132,18 +132,18 @@ impl TextureImage {
 		let size = real.outer_size();
 		let min = real.min();
 		let data = self.data.region_by_pixels(min, size);
-		self.apply(Edit::Block(BlockEdit{
+		self.edit(BlockEdit{
 			old: ColorImage::filled(size, Color32::from_black_alpha(0)),
 			coord: min,
-		}));
+		});
 		data
 	}
 
 	pub fn paste(&mut self, pos: PixCoord, data: &ColorImage) {
-		self.apply(Edit::Block(BlockEdit{
+		self.edit(BlockEdit{
 			old: data.clone(),
 			coord: pos,
-		}));
+		});
 	}
 
 	pub fn delete(&mut self, rect: PixRect) {
@@ -151,10 +151,10 @@ impl TextureImage {
 		let real = rect.limit(self.data.size);
 		let size = real.outer_size();
 		let min = real.min();
-		self.apply(Edit::Block(BlockEdit{
+		self.edit(BlockEdit{
 			old: ColorImage::filled(size, Color32::TRANSPARENT),
 			coord: min,
-		}));
+		});
 	}
 
 	/// Mark the current edit as complete and push it to the history

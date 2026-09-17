@@ -31,6 +31,15 @@ impl PixelEdit {
 
 pub type PixelEdits = Vec<PixelEdit>;
 
+pub fn create_pixel_edits(col: Color32, coords: &Vec<PixCoord>) -> PixelEdits {
+	coords.iter().map(|pos| {
+		PixelEdit {
+			oldcol: col,
+			coord: *pos,
+		}
+	}).collect()
+}
+
 impl ImageEdit for PixelEdits {
 	fn apply(&self, target: &mut ColorImage) -> (Box<dyn ImageEdit>, PixRect) {
 		let mut redo: Vec<PixelEdit> = vec![];
@@ -38,7 +47,8 @@ impl ImageEdit for PixelEdits {
 			a: self[0].coord,
 			b: self[0].coord,
 		};
-		for edit in self.iter().rev() {
+
+		for edit in self.iter() {
 			// We can unwrap here since these changes have already been done and so should be totally fine
 			redo.push(PixelEdit::new(target, edit.coord).unwrap());
 			let idx = coord_to_idx(edit.coord, &target);
@@ -47,6 +57,7 @@ impl ImageEdit for PixelEdits {
 		}
 
 		println!("{:?}", area);
+		redo.reverse();
 		(Box::new(redo), area)
 	}
 }
