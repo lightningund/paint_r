@@ -439,22 +439,11 @@ impl MyApp {
 				}
 			} else if self.tool == Tool::Line {
 				if let Some(rect) = self.selection.take() {
-					// let edits = bresenham::line(rect.a, rect.b).iter().map(|pos| {
-					// 	PixelEdit {
-					// 		oldcol: col,
-					// 		coord: *pos,
-					// 	}
-					// }).collect::<Vec<PixelEdit>>();
 					let edits = create_pixel_edits(col, &bresenham::line(rect.a, rect.b));
 					img.edit(edits);
 				}
 			} else if self.tool == Tool::Pencil {
-				let edits = self.drag_path.iter().map(|pos| {
-					PixelEdit {
-						oldcol: col,
-						coord: *pos,
-					}
-				}).collect::<Vec<PixelEdit>>();
+				let edits = create_pixel_edits(col, &self.drag_path);
 				img.edit(edits);
 			}
 
@@ -534,12 +523,10 @@ impl MyApp {
 
 				if let Some(last) = self.last_coord {
 					for point in bresenham::line(last, coords) {
-						img.edit(color, point);
-						img.save_state();
+						self.drag_path.push(point);
 					}
 				} else {
-					img.edit(color, coords);
-					img.save_state();
+					self.drag_path.push(coords);
 				}
 			}
 		}

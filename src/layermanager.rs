@@ -278,15 +278,20 @@ impl LayerManager {
 	}
 
 	pub fn save(&self, path: &Path) -> Result<(), image::ImageError> {
+		// Strip everything but the raw image data and the settings
+		// We do this because the layer otherwise isn't Sync
+		let layer_data: Vec<(&ColorImage, &LayerSettings)> = self.layers.iter().map(|layer| (&layer.image.data, &layer.settings)).collect();
+		// Similarly, we can't copy self, so we take a copy of the size
+		let self_size = self.size;
 		let buf = image::ImageBuffer::<image::Rgba<u8>, _>::from_par_fn(
 			self.size[0] as u32,
 			self.size[1] as u32,
 			|x, y| -> image::Rgba<u8> {
 				let mut pixel = Color32::TRANSPARENT;
-				let idx = (x as usize) + (y as usize) * self.size[0];
-				for l in &self.layers {
-					let mut l_pixel = l.image.data.pixels[idx];
-					l_pixel = l_pixel.gamma_multiply_u8(l.settings.opacity);
+				let idx = (x as usize) + (y as usize) * self_size[0];
+				for l in layer_data.iter() {
+					let mut l_pixel = l.0.pixels[idx];
+					l_pixel = l_pixel.gamma_multiply_u8(l.1.opacity);
 					pixel = pixel.blend(l_pixel);
 				}
 				image::Rgba(pixel.to_array())
