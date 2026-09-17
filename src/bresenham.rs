@@ -55,7 +55,6 @@ pub fn line(start: [usize; 2], end: [usize; 2]) -> Vec<[usize; 2]> {
 		.collect()
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;

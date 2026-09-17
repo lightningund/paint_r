@@ -10,7 +10,7 @@ use eframe::egui;
 use egui::{Color32, Button, Ui, ColorImage, Rect};
 use image::{ImageReader};
 
-use crate::edit::{PixelEdit, PixelEdits, create_pixel_edits};
+use crate::edit::{create_pixel_edits};
 use crate::textureimage::*;
 use crate::layermanager::*;
 use crate::types::*;
@@ -280,6 +280,8 @@ impl MyApp {
 
 			if self.tool == Tool::Pencil {
 				let painter = ui.painter();
+				// TODO: Make this take into account which click
+				// TODO: Make this a function since it's double used
 				painter.extend(self.drag_path.iter().map(|coord| {
 					eframe::epaint::Shape::Rect(eframe::epaint::RectShape::filled(
 						PixRect {a: *coord, b: *coord}.into(),
@@ -439,6 +441,7 @@ impl MyApp {
 		let img = &mut self.layers.get_active_mut()?.image;
 		let pos = response.hover_pos()?;
 
+		// TODO: This should be more places and more robust
 		if response.drag_stopped() && (
 			response.drag_stopped_by(PRIMARY_CLICK)
 			|| response.drag_stopped_by(SECONDARY_CLICK)
@@ -531,19 +534,12 @@ impl MyApp {
 	}
 
 	fn draw(&mut self, coords: PixCoord, primary: bool) {
-		if self.last_coord.is_none_or(|last| coords != last) {
-			if let Some(layer) = &mut self.layers.get_active_mut() {
-				let img = &mut layer.image;
-				let color = if primary { self.color } else { self.secondary };
-
-				if let Some(last) = self.last_coord {
-					for point in bresenham::line(last, coords) {
-						self.drag_path.push(point);
-					}
-				} else {
-					self.drag_path.push(coords);
-				}
+		if let Some(last) = self.last_coord && last != coords{
+			for point in bresenham::line(last, coords) {
+				self.drag_path.push(point);
 			}
+		} else {
+			self.drag_path.push(coords);
 		}
 	}
 
