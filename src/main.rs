@@ -76,6 +76,9 @@ enum Tool {
 	Pencil,
 	Rect,
 	Select,
+	MoveSelection,
+	MoveSelected,
+	ResizeSelected,
 	Paste,
 	Line,
 }
@@ -256,8 +259,10 @@ impl MyApp {
 		ui.selectable_value(&mut self.tool, Tool::Pencil, "Pencil");
 		ui.selectable_value(&mut self.tool, Tool::Rect, "Rect");
 		ui.selectable_value(&mut self.tool, Tool::Line, "Line");
-		ui.selectable_value(&mut self.tool, Tool::Select, "Select");
 		ui.selectable_value(&mut self.tool, Tool::Eyedropper, "Eyedropper");
+		ui.selectable_value(&mut self.tool, Tool::Select, "Select");
+		ui.add_enabled_ui(self.selection.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::MoveSelection, "Move Selection"));
+		ui.add_enabled_ui(self.selection.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::MoveSelected, "Move Selected"));
 		ui.add_enabled_ui(self.clipboard.is_some(), |ui| ui.selectable_value(&mut self.tool, Tool::Paste, "Paste"));
 
 		// Also check for shortcuts
@@ -488,8 +493,25 @@ impl MyApp {
 						img.paste(coords, section);
 					}
 				},
+				Tool::MoveSelection => {
+					if let Some(rect) = &mut self.selection {
+						if let Some(last) = self.last_coord {
+							// TODO this crashes because delta needs to be able to be negative
+							let delta = coord_sub(coords, last);
+							rect.a = coord_add(rect.a, delta);
+							rect.b = coord_add(rect.b, delta);
+						}
+					}
+				},
+				Tool::MoveSelected => {
+					todo!();
+				},
+				Tool::ResizeSelected => {
+					todo!();
+				}
 			}
 
+			self.last_coord = Some(coords);
 			self.interacting = true;
 		}
 
@@ -515,8 +537,6 @@ impl MyApp {
 						img.save_state();
 					}
 				}
-
-				self.last_coord = Some(coords);
 			}
 		}
 	}

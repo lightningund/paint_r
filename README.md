@@ -37,7 +37,7 @@ Planned features:
 	- xor
 - expanding selection
 - subtracting selection
-- deleting selected
+- ~~deleting selected~~
 - copying to system clipboard
 - pasting from system clipboard
 - rotating
@@ -46,7 +46,7 @@ Planned features:
 - checkerboard transparency background
 - color palette
 - unsaved exit warning
-- import images on top of the existing canvas
+- ~~import images on top of the existing canvas~~
 - tools
 	- ~~rectangle~~
 		- just outline
@@ -56,5 +56,8 @@ Planned features:
 	- fill
 	- magic wand selection
 	- move selection
+	- resize selection
 	- move selected
+	- resize selected
 	- brush
+	- resize canvas
