@@ -19,8 +19,8 @@ pub struct TextureImage {
 	pub size: Rect,
 	pub data: ColorImage,
 	pub handle: TextureHandle,
-	history: Vec<Edit>,
-	redos: Vec<Edit>,
+	history: Vec<Box<dyn ImageEdit>>,
+	redos: Vec<Box<dyn ImageEdit>>,
 }
 
 impl TextureImage {

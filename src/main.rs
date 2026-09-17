@@ -98,6 +98,7 @@ struct MyApp {
 	clipboard: Option<ColorImage>,
 	cursor_pos: Option<PixCoord>,
 	path: Option<PathBuf>,
+	drag_path: Vec<PixCoord>, // The current list of pixels we have dragged over since we last released
 }
 
 impl Default for MyApp {
@@ -117,6 +118,7 @@ impl Default for MyApp {
 			clipboard: Default::default(),
 			cursor_pos: Default::default(),
 			path: Default::default(),
+			drag_path: Default::default(),
 		}
 	}
 }
