@@ -31,13 +31,16 @@ impl PixelEdit {
 
 pub type PixelEdits = Vec<PixelEdit>;
 
-pub fn create_pixel_edits(col: Color32, coords: &Vec<PixCoord>) -> PixelEdits {
-	coords.iter().map(|pos| {
+/// Returns `None` if the list of coordinates is empty
+pub fn create_pixel_edits(col: Color32, coords: &Vec<PixCoord>) -> Option<PixelEdits> {
+	if coords.len() == 0 { return None; }
+
+	Some(coords.iter().map(|pos| {
 		PixelEdit {
 			oldcol: col,
 			coord: *pos,
 		}
-	}).collect()
+	}).collect())
 }
 
 impl ImageEdit for PixelEdits {

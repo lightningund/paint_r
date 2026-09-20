@@ -456,12 +456,14 @@ impl MyApp {
 				}
 			} else if self.tool == Tool::Line {
 				if let Some(rect) = self.selection.take() {
-					let edits = create_pixel_edits(col, &bresenham::line(rect.a, rect.b));
-					img.edit(edits);
+					if let Some(edits) = create_pixel_edits(col, &bresenham::line(rect.a, rect.b)) {
+						img.edit(edits);
+					}
 				}
 			} else if self.tool == Tool::Pencil {
-				let edits = create_pixel_edits(col, &self.drag_path);
-				img.edit(edits);
+				if let Some(edits) = create_pixel_edits(col, &self.drag_path) {
+					img.edit(edits);
+				}
 			}
 
 			img.save_state();
