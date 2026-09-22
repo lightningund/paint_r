@@ -74,15 +74,6 @@ impl TextureImage {
 		self.assign(target);
 	}
 
-	/// Sets a portion of the image and updates the texture handle
-	///
-	/// Does not modify the history in any way
-	fn set_edit(&mut self, edit: &PixelEdit) {
-		let idx = coord_to_idx(edit.coord, &self.data);
-		self.data.pixels[idx] = edit.oldcol;
-		self.handle.set_partial(edit.coord, self.data.region_by_pixels(edit.coord, [1, 1]), TEX_OPTS);
-	}
-
 	/// Undoes the last edit and pushes it to the redo history
 	///
 	/// Does nothing if there is no history
@@ -108,38 +99,6 @@ impl TextureImage {
 
 		self.save_state();
 	}
-
-	/// Set a single pixel to a color
-	///
-	/// Does nothing if the coordinates are out of the bounds of the image
-	///
-	/// Handled seperately so that individual pixel edits can be batched in the history
-	// pub fn edit(&mut self, color: Color32, coord: PixCoord) {
-	// 	if coord[0] >= self.data.width() || coord[1] >= self.data.height() { return; }
-
-	// 	if self.saved {
-	// 		self.saved = false;
-	// 		self.history.push(Edit::Pixels(vec![]));
-	// 	}
-
-	// 	// If the last one isn't a pixels edit, then push one
-	// 	match self.history.last() {
-	// 		Some(Edit::Pixels(_)) => {},
-	// 		_ => { self.history.push(Edit::Pixels(vec![])); }
-	// 	}
-
-	// 	// We know this is going to be true, but whatever I guess
-	// 	// There's definitely a better way to do this
-	// 	if let Some(Edit::Pixels(edits)) = self.history.last_mut() {
-	// 		self.redos.clear();
-	// 		// We can unwrap here since we already did bounds checking on the top
-	// 		edits.push(PixelEdit::new(&self.data, coord).unwrap()); // add this edit to the current ongoing "Undo" edit
-	// 		self.set_edit(&PixelEdit{
-	// 			oldcol: color,
-	// 			coord,
-	// 		});
-	// 	}
-	// }
 
 	pub fn edit<E: ImageEdit + 'static>(&mut self, edit: E) {
 		self.redos.clear();
