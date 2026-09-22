@@ -79,7 +79,8 @@ enum Tool {
 }
 
 trait DialogBox {
-	const NAME: &str;
+	/// Returns the name that the dialogue box should have
+	fn name(&self) -> &str;
 
 	/// Takes in the dialog box Ui, and returns whether or not the dialog was closed
 	fn show(&mut self, ui: &mut Ui, myapp: &mut MyApp) -> bool;
@@ -92,7 +93,7 @@ struct ImageCreator {
 }
 
 impl DialogBox for ImageCreator {
-	const NAME: &str = "Create Image";
+	fn name(&self) -> &str { "Create Image" }
 
 	fn show(&mut self, ui: &mut Ui, myapp: &mut MyApp) -> bool {
 		let wlabel = ui.label("Width:");
@@ -126,7 +127,7 @@ struct Resizer {
 }
 
 impl DialogBox for Resizer {
-	const NAME: &str = "Resize Image";
+	fn name(&self) -> &str { "Resize Image" }
 
 	fn show(&mut self, ui: &mut Ui, myapp: &mut MyApp) -> bool {
 		// TODO: Show current image size
@@ -156,8 +157,7 @@ impl DialogBox for Resizer {
 }
 
 struct MyApp {
-	creating_img: Option<ImageCreator>, // If we currently have the create new image dialog up
-	resizing_img: Option<Resizer>, // If we currently have the image resize dialog up
+	current_dialog: Option<Box<dyn DialogBox>>, // If we currently have a dialog box open
 	show_grid: bool, // Whether to show gridlines around the pixels
 	color: Color32,
 	secondary: Color32,
@@ -176,8 +176,7 @@ struct MyApp {
 impl Default for MyApp {
 	fn default() -> Self {
 		Self {
-			creating_img: Default::default(),
-			resizing_img: Default::default(),
+			current_dialog: Default::default(),
 			show_grid: false,
 			color: Color32::WHITE,
 			secondary: Color32::BLACK,
@@ -198,11 +197,8 @@ impl Default for MyApp {
 impl eframe::App for MyApp {
 	// This is called every time the screen updates
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-		// Show the image creation window if needed
-		self.image_creator_window(ui);
-
-		// Show the image resize window if needed
-		self.resizer_window(ui);
+		// Show the current dialog box if there is one
+		self.show_dialog(ui);
 
 		// The main settings
 		egui::Panel::top(ui.next_auto_id()).show_inside(ui, |ui| self.top_bar(ui));
@@ -239,34 +235,18 @@ fn set_if_key<T>(ctx: &egui::Context, key: egui::Key, target: &mut T, val: T) {
 
 // UI Elements
 impl MyApp {
-	/// Popup window used for creating images
-	fn image_creator_window(&mut self, ui: &mut Ui) {
-		if let Some(mut creator) = self.creating_img.take() {
-			let mut created = false;
-			egui::Window::new("Create New Image")
+	fn show_dialog(&mut self, ui: &mut Ui) {
+		if let Some(mut dialog) = self.current_dialog.take() {
+			let mut closed = false;
+			egui::Window::new(dialog.name())
 				.order(egui::Order::Foreground)
 				.collapsible(false)
 				.show(ui.ctx(), |ui| {
-				created = creator.show(ui, self);
+				closed = dialog.show(ui, self);
 			});
 
 			// If we didn't actually make the image this frame, put it back
-			if !created { self.creating_img = Some(creator); }
-		}
-	}
-
-	fn resizer_window(&mut self, ui: &mut Ui) {
-		if let Some(mut resizer) = self.resizing_img.take() {
-			let mut resized = false;
-			egui::Window::new("Resize Image")
-				.order(egui::Order::Foreground)
-				.collapsible(false)
-				.show(ui.ctx(), |ui| {
-				resized = resizer.show(ui, self);
-			});
-
-			// If we didn't actually make the image this frame, put it back
-			if !resized { self.resizing_img = Some(resizer); }
+			if !closed { self.current_dialog = Some(dialog); }
 		}
 	}
 
@@ -274,7 +254,7 @@ impl MyApp {
 	fn top_bar(&mut self, ui: &mut Ui) {
 		ui.horizontal(|ui| {
 			if ui.button("New").clicked() {
-				self.creating_img = Some(Default::default());
+				self.current_dialog = Some(Box::new(ImageCreator::default()));
 			}
 
 			if ui.button("Open").clicked() {
@@ -299,7 +279,7 @@ impl MyApp {
 				}
 
 				if ui.button("Resize").clicked() {
-					self.resizing_img = Some(Default::default());
+					self.current_dialog = Some(Box::new(Resizer::default()));
 				}
 			});
 
@@ -472,7 +452,7 @@ impl MyApp {
 			}
 		} else if modifiers.matches_logically(egui::Modifiers::COMMAND) {
 			if pressed(ctx, Key::N) { // New
-				self.creating_img = Some(Default::default());
+				self.current_dialog = Some(Box::new(ImageCreator::default()));
 			} else if pressed(ctx, Key::O) { // Open
 				self.open(ctx);
 			}
