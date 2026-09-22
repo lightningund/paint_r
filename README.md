@@ -47,8 +47,6 @@ Planned features:
 - rotating
 - ~~image resize~~
 	- different rescaling modes
-- canvas resize
-- canvas expand/shrink
 - checkerboard transparency background
 - color palette
 - unsaved exit warning
