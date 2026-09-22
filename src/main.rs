@@ -65,12 +65,6 @@ fn load_image_from_path(path: &Path) -> Result<ColorImage, image::ImageError> {
 	))
 }
 
-#[derive(Default, Debug)]
-struct ImageCreator {
-	width: String,
-	height: String,
-}
-
 #[derive(PartialEq)]
 enum Tool {
 	Eyedropper,
@@ -84,8 +78,22 @@ enum Tool {
 	Line,
 }
 
+// TODO: Make a trait like "DialogBox" or smth so I can just have an option that contains one of those
+#[derive(Default, Debug)]
+struct ImageCreator {
+	width: String,
+	height: String,
+}
+
+#[derive(Default, Debug)]
+struct Resizer {
+	width: String,
+	height: String,
+}
+
 struct MyApp {
 	creating_img: Option<ImageCreator>, // If we currently have the create new image dialog up
+	resizing_img: Option<Resizer>, // If we currently have the image resize dialog up
 	show_grid: bool, // Whether to show gridlines around the pixels
 	color: Color32,
 	secondary: Color32,
@@ -104,7 +112,8 @@ struct MyApp {
 impl Default for MyApp {
 	fn default() -> Self {
 		Self {
-			creating_img: None,
+			creating_img: Default::default(),
+			resizing_img: Default::default(),
 			show_grid: false,
 			color: Color32::WHITE,
 			secondary: Color32::BLACK,
@@ -127,6 +136,9 @@ impl eframe::App for MyApp {
 	fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
 		// Show the image creation window if needed
 		self.image_creator_window(ui);
+
+		// Show the image resize window if needed
+		self.resizer_window(ui);
 
 		// The main settings
 		egui::Panel::top(ui.next_auto_id()).show_inside(ui, |ui| self.top_bar(ui));
@@ -195,6 +207,39 @@ impl MyApp {
 		}
 	}
 
+	// TODO: De-duplicate and abstract a lot of this into functions
+	fn resizer_window(&mut self, ui: &mut Ui) {
+		if let Some(mut resizer) = self.resizing_img.take() {
+			let mut resized = false;
+			egui::Window::new("Resize Image")
+				.order(egui::Order::Foreground)
+				.collapsible(false)
+				.show(ui.ctx(), |ui| {
+				let wlabel = ui.label("Width:");
+				ui.text_edit_singleline(&mut resizer.width).labelled_by(wlabel.id);
+				let hlabel = ui.label("Height:");
+				ui.text_edit_singleline(&mut resizer.height).labelled_by(hlabel.id);
+
+				if ui.button("Create").clicked() {
+					if let Ok(w) = resizer.width.parse() && let Ok(h) = resizer.height.parse() {
+						self.layers.resize(w, h);
+						resized = true;
+					} else {
+						// TODO: Add a real way to report errors
+						println!("Please enter only numbers");
+					}
+				}
+
+				if ui.button("Cancel").clicked() {
+					resized = true;
+				}
+			});
+
+			// If we didn't actually make the image this frame, put it back
+			if !resized { self.resizing_img = Some(resizer); }
+		}
+	}
+
 	/// All of the main settings
 	fn top_bar(&mut self, ui: &mut Ui) {
 		ui.horizontal(|ui| {
@@ -206,19 +251,27 @@ impl MyApp {
 				self.open(ui.ctx());
 			}
 
-			if ui.add_enabled(!self.layers.is_empty(), Button::new("Import"))
-				.on_hover_text("Import an image as a new layer above the current on")
-				.clicked() {
-				self.import(ui.ctx());
-			}
+			let has_layers = !self.layers.is_empty();
 
-			if ui.add_enabled(!self.layers.is_empty() && self.path.is_some(), Button::new("Save")).clicked() {
-				self.save_img();
-			}
+			ui.add_enabled_ui(has_layers, |ui| {
+				if ui.button("Import")
+					.on_hover_text("Import an image as a new layer above the current on")
+					.clicked() {
+					self.import(ui.ctx());
+				}
 
-			if ui.add_enabled(!self.layers.is_empty(), Button::new("Save As")).clicked() {
-				self.save_as();
-			}
+				if ui.add_enabled(self.path.is_some(), Button::new("Save")).clicked() {
+					self.save_img();
+				}
+
+				if ui.button("Save As").clicked() {
+					self.save_as();
+				}
+
+				if ui.button("Resize").clicked() {
+					self.resizing_img = Some(Default::default());
+				}
+			});
 
 			ui.color_edit_button_srgba(&mut self.color);
 			ui.label("/");

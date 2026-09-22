@@ -53,6 +53,16 @@ impl LayerManager {
 		self.layers.get_mut(self.curr_layer)
 	}
 
+	// TODO: Make this undo-able
+	/// Resizes all layers to the specified size
+	pub fn resize(&mut self, w: usize, h: usize) {
+		for layer in &mut self.layers {
+			layer.image.resize([w, h]);
+		}
+
+		self.size = [w, h];
+	}
+
 	pub fn add_layer(&mut self, img: TextureImage) -> Result<&Layer, DimensionError> {
 		if self.is_empty() {
 			// If this is the first image, use its size to determine our own

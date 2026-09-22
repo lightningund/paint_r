@@ -11,6 +11,11 @@ static TEX_OPTS: egui::TextureOptions = egui::TextureOptions{
 	wrap_mode: egui::TextureWrapMode::ClampToEdge,
 };
 
+/// Creates a `ColorImage` with the given size and all transparent pixels
+fn create_image(size: PixCoord) -> ColorImage {
+	ColorImage::filled(size, Color32::TRANSPARENT)
+}
+
 /// An image that owns an array in memory of the pixel data, as well as a texture handle
 ///
 /// Currently also stores edit history, but this may change
@@ -42,6 +47,31 @@ impl TextureImage {
 		self.handle.set(data, TEX_OPTS);
 		self.history = Default::default();
 		self.redos = Default::default();
+	}
+
+	/// Gets the nearest pixel when scaling
+	///
+	/// `coord` corresponds to the coordinates in the *target* image
+	fn get_scaled_pixel(&self, coord: PixCoord, size: PixCoord) -> Color32 {
+		// The coordinate on our image
+		let scaled_coord = coord_map(coord, [0, 0], size, [0, 0], rect_to_size(self.size));
+		let idx = coord_to_idx(scaled_coord, &self.data);
+		self.data.pixels[idx]
+	}
+
+	/// Resizes using nearest-neighbor
+	pub fn resize(&mut self, size: PixCoord) {
+		let mut target = create_image(size);
+
+		// TODO: make this a buffer creation iterator instead of repeated writes?
+		for x in 0..size[0] {
+			for y in 0..size[1] {
+				let idx = coord_to_idx([x, y], &target);
+				target.pixels[idx] = self.get_scaled_pixel([x, y], size);
+			}
+		}
+
+		self.assign(target);
 	}
 
 	/// Sets a portion of the image and updates the texture handle

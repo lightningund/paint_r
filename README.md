@@ -45,12 +45,15 @@ Planned features:
 - copying to system clipboard
 - pasting from system clipboard
 - rotating
+- image resize
+	- different rescaling modes
 - canvas resize
 - canvas expand/shrink
 - checkerboard transparency background
 - color palette
 - unsaved exit warning
 - ~~import images on top of the existing canvas~~
+- total menu overhaul
 - tools
 	- ~~rectangle~~
 		- just outline

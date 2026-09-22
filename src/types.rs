@@ -7,6 +7,10 @@ pub fn size_to_rect(size: PixCoord) -> Rect {
 	Rect::from_two_pos(Pos2::ZERO, Pos2::new(size[0] as f32, size[1] as f32))
 }
 
+pub fn rect_to_size(rect: Rect) -> PixCoord {
+	[rect.width() as usize, rect.height() as usize]
+}
+
 pub fn coord_to_idx(coord: PixCoord, img: &ColorImage) -> usize {
 	coord[0] + coord[1] * img.width()
 }
@@ -25,6 +29,27 @@ pub fn coord_add(a: PixCoord, b: PixCoord) -> PixCoord {
 
 pub fn coord_sub(a: PixCoord, b: PixCoord) -> PixCoord {
 	[a[0] - b[0], a[1] - b[1]]
+}
+
+/// Converts to isize first, so don't call it with anything *too* big
+fn u_map(val: usize, a_min: usize, a_max: usize, b_min: usize, b_max: usize) -> usize {
+	(
+		(
+			((val as isize) - (a_min as isize))
+			/
+			((a_max as isize) - (a_min as isize))
+		) *
+		((b_max as isize) - (b_min as isize))
+		+
+		(b_min as isize)
+	) as usize
+}
+
+pub fn coord_map(t: PixCoord, a_min: PixCoord, a_max: PixCoord, b_min: PixCoord, b_max: PixCoord) -> PixCoord {
+	[
+		u_map(t[0], a_min[0], a_max[0], b_min[0], b_max[0]),
+		u_map(t[1], a_min[1], a_max[1], b_min[1], b_max[1]),
+	]
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
