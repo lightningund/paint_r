@@ -82,10 +82,9 @@ trait DialogBox {
 	const NAME: &str;
 
 	/// Takes in the dialog box Ui, and returns whether or not the dialog was closed
-	fn show(&mut self, ui: &mut Ui) -> bool;
+	fn show(&mut self, ui: &mut Ui, myapp: &mut MyApp) -> bool;
 }
 
-// TODO: Make a trait like "DialogBox" or smth so I can just have an option that contains one of those
 #[derive(Default, Debug)]
 struct ImageCreator {
 	width: String,
@@ -95,7 +94,7 @@ struct ImageCreator {
 impl DialogBox for ImageCreator {
 	const NAME: &str = "Create Image";
 
-	fn show(&mut self, ui: &mut Ui) -> bool {
+	fn show(&mut self, ui: &mut Ui, myapp: &mut MyApp) -> bool {
 		let wlabel = ui.label("Width:");
 		ui.text_edit_singleline(&mut self.width).labelled_by(wlabel.id);
 		let hlabel = ui.label("Height:");
@@ -129,7 +128,7 @@ struct Resizer {
 impl DialogBox for Resizer {
 	const NAME: &str = "Resize Image";
 
-	fn show(&mut self, ui: &mut Ui) -> bool {
+	fn show(&mut self, ui: &mut Ui, myapp: &mut MyApp) -> bool {
 		// TODO: Show current image size
 		// TODO: Allow resizing by percentage
 		let wlabel = ui.label("Width:");
@@ -248,7 +247,7 @@ impl MyApp {
 				.order(egui::Order::Foreground)
 				.collapsible(false)
 				.show(ui.ctx(), |ui| {
-				created = creator.show(ui);
+				created = creator.show(ui, self);
 			});
 
 			// If we didn't actually make the image this frame, put it back
@@ -263,7 +262,7 @@ impl MyApp {
 				.order(egui::Order::Foreground)
 				.collapsible(false)
 				.show(ui.ctx(), |ui| {
-				resized = resizer.show(ui);
+				resized = resizer.show(ui, self);
 			});
 
 			// If we didn't actually make the image this frame, put it back
