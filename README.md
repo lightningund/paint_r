@@ -45,7 +45,7 @@ Planned features:
 - copying to system clipboard
 - pasting from system clipboard
 - rotating
-- image resize
+- ~~image resize~~
 	- different rescaling modes
 - canvas resize
 - canvas expand/shrink
