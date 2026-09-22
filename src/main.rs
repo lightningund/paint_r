@@ -78,6 +78,13 @@ enum Tool {
 	Line,
 }
 
+trait DialogBox {
+	const NAME: &str;
+
+	/// Takes in the dialog box Ui, and returns whether or not the dialog was closed
+	fn show(&mut self, ui: &mut Ui) -> bool;
+}
+
 // TODO: Make a trait like "DialogBox" or smth so I can just have an option that contains one of those
 #[derive(Default, Debug)]
 struct ImageCreator {
@@ -85,10 +92,68 @@ struct ImageCreator {
 	height: String,
 }
 
+impl DialogBox for ImageCreator {
+	const NAME: &str = "Create Image";
+
+	fn show(&mut self, ui: &mut Ui) -> bool {
+		let wlabel = ui.label("Width:");
+		ui.text_edit_singleline(&mut self.width).labelled_by(wlabel.id);
+		let hlabel = ui.label("Height:");
+		ui.text_edit_singleline(&mut self.height).labelled_by(hlabel.id);
+
+		if ui.button("Create").clicked() {
+			if let Ok(w) = self.width.parse() && let Ok(h) = self.height.parse() {
+				// TODO
+				myapp.assign_img(ui.ctx(), ColorImage::filled([w, h], Color32::WHITE), Path::new(""));
+				return true;
+			} else {
+				// TODO: Add a real way to report errors
+				println!("Please enter only numbers");
+			}
+		}
+
+		if ui.button("Cancel").clicked() {
+			return true;
+		}
+
+		false
+	}
+}
+
 #[derive(Default, Debug)]
 struct Resizer {
 	width: String,
 	height: String,
+}
+
+impl DialogBox for Resizer {
+	const NAME: &str = "Resize Image";
+
+	fn show(&mut self, ui: &mut Ui) -> bool {
+		// TODO: Show current image size
+		// TODO: Allow resizing by percentage
+		let wlabel = ui.label("Width:");
+		ui.text_edit_singleline(&mut self.width).labelled_by(wlabel.id);
+		let hlabel = ui.label("Height:");
+		ui.text_edit_singleline(&mut self.height).labelled_by(hlabel.id);
+
+		if ui.button("Confirm").clicked() {
+			if let Ok(w) = self.width.parse() && let Ok(h) = self.height.parse() {
+				// TODO
+				myapp.layers.resize(w, h);
+				return true;
+			} else {
+				// TODO: Add a real way to report errors
+				println!("Please enter only numbers");
+			}
+		}
+
+		if ui.button("Cancel").clicked() {
+			return true;
+		}
+
+		false
+	}
 }
 
 struct MyApp {
@@ -183,23 +248,7 @@ impl MyApp {
 				.order(egui::Order::Foreground)
 				.collapsible(false)
 				.show(ui.ctx(), |ui| {
-				let wlabel = ui.label("Width:");
-				ui.text_edit_singleline(&mut creator.width).labelled_by(wlabel.id);
-				let hlabel = ui.label("Height:");
-				ui.text_edit_singleline(&mut creator.height).labelled_by(hlabel.id);
-
-				if ui.button("Create").clicked() {
-					if let Ok(w) = creator.width.parse() && let Ok(h) = creator.height.parse() {
-						self.assign_img(ui.ctx(), ColorImage::filled([w, h], Color32::WHITE), Path::new(""));
-						created = true;
-					} else {
-						println!("Please enter only numbers");
-					}
-				}
-
-				if ui.button("Cancel").clicked() {
-					created = true;
-				}
+				created = creator.show(ui);
 			});
 
 			// If we didn't actually make the image this frame, put it back
@@ -207,7 +256,6 @@ impl MyApp {
 		}
 	}
 
-	// TODO: De-duplicate and abstract a lot of this into functions
 	fn resizer_window(&mut self, ui: &mut Ui) {
 		if let Some(mut resizer) = self.resizing_img.take() {
 			let mut resized = false;
@@ -215,24 +263,7 @@ impl MyApp {
 				.order(egui::Order::Foreground)
 				.collapsible(false)
 				.show(ui.ctx(), |ui| {
-				let wlabel = ui.label("Width:");
-				ui.text_edit_singleline(&mut resizer.width).labelled_by(wlabel.id);
-				let hlabel = ui.label("Height:");
-				ui.text_edit_singleline(&mut resizer.height).labelled_by(hlabel.id);
-
-				if ui.button("Create").clicked() {
-					if let Ok(w) = resizer.width.parse() && let Ok(h) = resizer.height.parse() {
-						self.layers.resize(w, h);
-						resized = true;
-					} else {
-						// TODO: Add a real way to report errors
-						println!("Please enter only numbers");
-					}
-				}
-
-				if ui.button("Cancel").clicked() {
-					resized = true;
-				}
+				resized = resizer.show(ui);
 			});
 
 			// If we didn't actually make the image this frame, put it back
