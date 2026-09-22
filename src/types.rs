@@ -31,18 +31,14 @@ pub fn coord_sub(a: PixCoord, b: PixCoord) -> PixCoord {
 	[a[0] - b[0], a[1] - b[1]]
 }
 
-/// Converts to isize first, so don't call it with anything *too* big
+/// Converts to f32 first
 fn u_map(val: usize, a_min: usize, a_max: usize, b_min: usize, b_max: usize) -> usize {
-	(
-		(
-			((val as isize) - (a_min as isize))
-			/
-			((a_max as isize) - (a_min as isize))
-		) *
-		((b_max as isize) - (b_min as isize))
-		+
-		(b_min as isize)
-	) as usize
+	let fval = val as f32;
+	let fa_min = a_min as f32;
+	let fa_max = a_max as f32;
+	let fb_min = b_min as f32;
+	let fb_max = b_max as f32;
+	(((fval - fa_min) / (fa_max - fa_min)) * (fb_max - fb_min) + fb_min) as usize
 }
 
 pub fn coord_map(t: PixCoord, a_min: PixCoord, a_max: PixCoord, b_min: PixCoord, b_max: PixCoord) -> PixCoord {
@@ -117,5 +113,24 @@ impl PixRect {
 			a: coord_min(self.min(), max_size),
 			b: coord_min(self.max(), max_size)
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_u_map() {
+		assert_eq!(u_map(  0, 0, 100, 0, 1000),    0);
+		assert_eq!(u_map( 20, 0, 100, 0, 1000),  200);
+		assert_eq!(u_map( 50, 0, 100, 0, 1000),  500);
+		assert_eq!(u_map( 80, 0, 100, 0, 1000),  800);
+		assert_eq!(u_map(100, 0, 100, 0, 1000), 1000);
+		assert_eq!(u_map(   0, 0, 1000, 0, 100),   0);
+		assert_eq!(u_map( 200, 0, 1000, 0, 100),  20);
+		assert_eq!(u_map( 500, 0, 1000, 0, 100),  50);
+		assert_eq!(u_map( 800, 0, 1000, 0, 100),  80);
+		assert_eq!(u_map(1000, 0, 1000, 0, 100), 100);
 	}
 }
